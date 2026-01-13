@@ -68,6 +68,16 @@
         .how-to-play { text-align: left; font-size: 13px; line-height: 1.4; margin: 15px 0; color: #aaa; max-width: 300px; }
         .how-to-play ol { padding-left: 20px; margin: 10px 0; }
         .how-to-play li { margin-bottom: 8px; }
+        
+        .promo-section { margin-top: 20px; border-top: 1px solid #333; padding-top: 15px; }
+        .promo-input { background: #000; color: #0f0; border: 1px solid #0f0; padding: 8px; width: 100%; margin: 10px 0; font-family: 'Courier New'; }
+        .killer-info { color: #f00; font-weight: bold; margin: 10px 0; }
+        
+        @media (min-width: 768px) {
+            .joystick-container, .ability-btn, .swap-weapon-btn, .pickup-btn {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
@@ -79,12 +89,18 @@
             <h1>DARK DUNGEON</h1>
             <div id="lobby-record" class="record-text">РЕКОРД: 1 ЭТАЖ</div>
             <div class="coin-display">💰 <span id="lobby-coins">0</span></div>
+            <button id="continue-btn" onclick="continueGame()" disabled>ПРОДОЛЖИТЬ</button>
             <button onclick="showScreen('screen-char')">ИГРАТЬ</button>
             <button onclick="showScreen('screen-settings')" style="border-color:#aaa; color:#aaa; font-size: 12px; padding: 8px;">НАСТРОЙКИ</button>
         </div>
         <div id="screen-settings" class="screen hidden">
             <h3>НАСТРОЙКИ</h3>
-            <button class="god-toggle-btn btn-god" onclick="tryToggleGodMode()">РЕЖИМ БОГА: ВЫКЛ</button>
+            <button class="god-toggle-btn btn-god" id="god-mode-btn" onclick="tryToggleGodMode()" disabled>РЕЖИМ БОГА: ВЫКЛ</button>
+            <div class="promo-section">
+                <h4>ПРОМОКОД</h4>
+                <input type="text" id="promo-code-input" class="promo-input" placeholder="Введите промокод">
+                <button onclick="applyPromoCode()">АКТИВИРОВАТЬ</button>
+            </div>
             <button onclick="showScreen('screen-howtoplay')" style="margin-top:10px;">КАК ИГРАТЬ?</button>
             <p style="font-size: 12px; color: #888; margin-top: 15px;">Управление игровыми данными</p>
             <button class="btn-reset" onclick="resetProgress()">СБРОСИТЬ ПРОГРЕСС</button>
@@ -106,7 +122,7 @@
         </div>
         <div id="screen-pause" class="screen hidden">
             <h3>ПАУЗА</h3>
-            <button class="god-toggle-btn btn-god" onclick="tryToggleGodMode()">РЕЖИМ БОГА: ВКЛ</button>
+            <button class="god-toggle-btn btn-god" id="god-mode-btn-pause" onclick="tryToggleGodMode()" disabled>РЕЖИМ БОГА: ВКЛ</button>
             <button onclick="togglePause()" style="margin-top:10px; border-color:#0f0;">ПРОДОЛЖИТЬ</button>
             <button onclick="confirmExitToMenu()" style="margin-top:10px; border-color:#f00; color:#f00;">В МЕНЮ</button>
         </div>
@@ -149,6 +165,7 @@
         <div id="screen-death" class="screen hidden">
             <h1 style="color:red">ГЕРОЙ ПАЛ</h1>
             <p id="final-score"></p>
+            <div class="killer-info" id="killer-info"></div>
             <p id="record-notice" style="color:#0af; font-size:12px;"></p>
             <div class="run-time" id="time-survived"></div>
             <div class="coin-display">Всего монет: <span id="death-coins">0</span></div>
@@ -186,11 +203,12 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 let width, height, shake = 0;
 
-let saveState = { coins: 0, unlocked: ["Боец"], bestFloor: 1, bestDiff: 'ЛЕГКО' };
+let saveState = { coins: 0, unlocked: ["Боец"], bestFloor: 1, bestDiff: 'ЛЕГКО', currentRun: null, godModeUnlocked: false };
 let godMode = false, isCheated = false, difficultyMultiplier = 1.0, difficultyName = 'СРЕДНЕ';
 let isPaused = false, anyRoomCleared = false, floorClearedMessageShown = false;
 let roomEntryCooldown = 0;
 let startTime = 0, endTime = 0;
+let lastDamagedBy = null;
 
 let keys = {};
 let mouse = { x: 0, y: 0, shoot: false, ability: false, shootPressed: false, abilityPressed: false };
@@ -242,10 +260,26 @@ function loadGame() {
         saveState.unlocked = parsed.unlocked || ["Боец"];
         saveState.bestFloor = parsed.bestFloor || 1;
         saveState.bestDiff = parsed.bestDiff || 'ЛЕГКО';
+        saveState.currentRun = parsed.currentRun || null;
+        saveState.godModeUnlocked = parsed.godModeUnlocked || false;
     }
     updateCoinDisplays();
     updateGodModeUI();
     updateLobbyRecord();
+    updateContinueButton();
+}
+
+function updateContinueButton() {
+    const btn = document.getElementById('continue-btn');
+    if (saveState.currentRun) {
+        btn.disabled = false;
+        btn.style.borderColor = "#0f0";
+        btn.style.color = "#0f0";
+    } else {
+        btn.disabled = true;
+        btn.style.borderColor = "#555";
+        btn.style.color = "#555";
+    }
 }
 
 function updateLobbyRecord() {
@@ -266,6 +300,8 @@ function updateCoinDisplays() {
 }
 
 function tryToggleGodMode() {
+    if (!saveState.godModeUnlocked) return;
+    
     if (!godMode) {
         document.getElementById('confirm-text').innerHTML = "ВКЛЮЧИТЬ РЕЖИМ БОГА?<br><span style='color:#0af; font-size:12px;'>Внимание: этот забег не будет засчитан в рекорд!</span>";
         document.getElementById('confirm-btn-yes').onclick = () => { 
@@ -288,7 +324,11 @@ function closeConfirm() {
 function updateGodModeUI() {
     const btns = document.querySelectorAll('.god-toggle-btn');
     btns.forEach(btn => {
-        if (godMode) {
+        btn.disabled = !saveState.godModeUnlocked;
+        if (!saveState.godModeUnlocked) {
+            btn.style.borderColor = "#555";
+            btn.style.color = "#555";
+        } else if (godMode) {
             btn.innerText = "РЕЖИМ БОГА: ВКЛ";
             btn.classList.add('on');
         } else {
@@ -296,6 +336,32 @@ function updateGodModeUI() {
             btn.classList.remove('on');
         }
     });
+}
+
+function applyPromoCode() {
+    const input = document.getElementById('promo-code-input');
+    const code = input.value.trim();
+    
+    if (code === "godmodeon") {
+        saveState.godModeUnlocked = true;
+        saveGame();
+        updateGodModeUI();
+        alert("Режим бога разблокирован!");
+        showScreen('screen-settings');
+    } else if (code.startsWith("rtyteamisgood")) {
+        const coins = parseInt(code.replace("rtyteamisgood", ""));
+        if (!isNaN(coins) && coins > 0) {
+            saveState.coins += coins;
+            saveGame();
+            alert(`Промокод активирован! Получено ${coins} монет.`);
+            showScreen('screen-settings');
+        } else {
+            alert("Неверный промокод");
+        }
+    } else {
+        alert("Неверный промокод");
+    }
+    input.value = "";
 }
 
 function togglePause() {
@@ -318,13 +384,14 @@ function resetProgress() {
 
 function confirmReset(result) {
     if (result) {
-        saveState = { coins: 0, unlocked: ["Боец"], bestFloor: 1, bestDiff: 'ЛЕГКО' };
+        saveState = { coins: 0, unlocked: ["Боец"], bestFloor: 1, bestDiff: 'ЛЕГКО', currentRun: null, godModeUnlocked: false };
         godMode = false;
         isCheated = false;
         saveGame();
         updateGodModeUI();
         selectedIdx = 0;
         updateLobbyRecord();
+        updateContinueButton();
         showScreen('screen-lobby');
     } else showScreen('screen-settings');
 }
@@ -339,10 +406,96 @@ function cancelExit() {
 }
 
 function exitToMenu() {
+    if (gameState === 'play' || gameState === 'paused') {
+        saveState.currentRun = {
+            selectedCharIndex: selectedIdx,
+            currentFloor: currentFloor,
+            difficultyMultiplier: difficultyMultiplier,
+            difficultyName: difficultyName,
+            player: JSON.parse(JSON.stringify(player)),
+            dungeon: JSON.parse(JSON.stringify(dungeon)),
+            curX: curX,
+            curY: curY,
+            playerWeapons: JSON.parse(JSON.stringify(playerWeapons)),
+            activeWeaponSlot: activeWeaponSlot,
+            startTime: startTime
+        };
+        saveGame();
+    }
     location.reload();
 }
 
+function continueGame() {
+    if (!saveState.currentRun) return;
+    
+    const run = saveState.currentRun;
+    selectedIdx = run.selectedCharIndex;
+    currentFloor = run.currentFloor;
+    difficultyMultiplier = run.difficultyMultiplier;
+    difficultyName = run.difficultyName;
+    player = run.player;
+    dungeon = run.dungeon;
+    curX = run.curX;
+    curY = run.curY;
+    playerWeapons = run.playerWeapons;
+    activeWeaponSlot = run.activeWeaponSlot;
+    startTime = run.startTime;
+    
+    const key = `${curX},${curY}`;
+    const room = dungeon[key];
+    if (room) {
+        enemies = room.enemies || [];
+        items = room.items || [];
+        obstacles = room.obs || [];
+        droppedCoins = room.droppedCoins || [];
+        roomDoors = room.doors || [];
+        isBossRoom = room.boss || false;
+        cameFromDir = room.entranceDir || null;
+        
+        if (isBossRoom && !room.cleared) {
+            const bossTypeName = room.bossType || "knight";
+            const bossType = bosses.find(b => b.type === bossTypeName) || bosses[0];
+            boss = {
+                ...bossType,
+                x: width/2,
+                y: height/2,
+                curHp: bossType.getHp(difficultyName),
+                maxHp: bossType.getHp(difficultyName),
+                lastAttack: Date.now(),
+                attackCooldown: 0,
+                state: "idle",
+                r: 30 * bossType.size,
+                frame: 0,
+                dead: false,
+                deathTimer: 0
+            };
+        } else {
+            boss = null;
+        }
+    }
+    
+    gameState = 'play';
+    showScreen('none');
+    document.getElementById('hud').classList.remove('hidden');
+    document.getElementById('mmap-cont').classList.remove('hidden');
+    if (isMobile) {
+        document.getElementById('controls').classList.remove('hidden');
+    }
+    document.getElementById('ingame-pause-btn').classList.remove('hidden');
+    document.getElementById('floor-val').innerText = `ЭТАЖ: ${currentFloor}`;
+    document.getElementById('difficulty-hud').innerText = `СЛОЖНОСТЬ: ${difficultyName}`;
+    document.getElementById('difficulty-hud').style.color = difficultyName === 'СЛОЖНО' ? '#f00' : (difficultyName === 'СРЕДНЕ' ? '#ff0' : '#0f0');
+    anyRoomCleared = false;
+    floorClearedMessageShown = false;
+    hideFloorCleared();
+    hidePickupButton();
+    updateWeaponHUD();
+    drawMinimap();
+}
+
 function setupControls() {
+    if (!isMobile) return;
+    
     setupJoystick('move-joy', 'move-stick', 'move');
     setupJoystick('shoot-joy', 'shoot-stick', 'shoot');
     
@@ -410,6 +563,7 @@ function showScreen(id) {
     if(id !== 'none' && document.getElementById(id)) {
         document.getElementById(id).classList.remove('hidden');
         if(id === 'screen-char') initCharList();
+        if(id === 'screen-lobby') updateContinueButton();
     }
 }
 
@@ -685,7 +839,7 @@ function createEnemies(obs) {
     let kamikazeCounter = 0;
     
     let availableTypes = ['shooter'];
-    if (currentFloor >= 2) availableTypes.push('bruiser', 'healer');
+    if (currentFloor >= 2) availableTypes.push('громила', 'healer');
     if (currentFloor >= 3) availableTypes.push('kamikaze', 'sniper');
     if (currentFloor >= 5) availableTypes.push('heavy_shooter', 'pyro');
     
@@ -710,7 +864,7 @@ function createEnemies(obs) {
         
         let baseHp = 100;
         if (type === 'kamikaze') baseHp = 65;
-        else if (type === 'bruiser') baseHp = 180;
+        else if (type === 'громила') baseHp = 180;
         else if (type === 'heavy_shooter') baseHp = 100;
         else if (type === 'pyro') baseHp = 150;
         else if (type === 'healer') baseHp = 80;
@@ -733,7 +887,7 @@ function createEnemies(obs) {
         
         switch(e.type) {
             case 'kamikaze': e.speed = 4.0; e.c = ["#400","#f00","#ff0","#200"]; e.state = 'run'; break;
-            case 'bruiser': e.speed = 2.2; e.c = ["#330","#660","#ff0","#220"]; break;
+            case 'громила': e.speed = 2.2; e.c = ["#330","#660","#ff0","#220"]; break;
             case 'heavy_shooter': e.speed = 1.5; e.c = ["#444","#222","#0af","#000"]; break;
             case 'pyro': e.speed = 2.2; e.c = ["#630","#f60","#ff0","#310"]; break;
             case 'healer': e.speed = 2.5; e.c = ["#040","#0f0","#fff","#020"]; break;
@@ -849,7 +1003,10 @@ function initGame(resetAll) {
         player = { ...d, x: width/2, y: height/2, curHp: d.hp, lastShot: 0, frame: 0, lookDir: 1, r: 15 };
         initPlayerWeapons(d);
         startTime = Date.now();
+        saveState.currentRun = null;
+        saveGame();
     } else {
+        updateRecord();
         player.curHp = Math.min(player.hp, player.curHp + 45);
     }
     
@@ -857,7 +1014,9 @@ function initGame(resetAll) {
     showScreen('none');
     document.getElementById('hud').classList.remove('hidden'); 
     document.getElementById('mmap-cont').classList.remove('hidden'); 
-    document.getElementById('controls').classList.remove('hidden');
+    if (isMobile) {
+        document.getElementById('controls').classList.remove('hidden');
+    }
     document.getElementById('ingame-pause-btn').classList.remove('hidden');
     document.getElementById('floor-val').innerText = `ЭТАЖ: ${currentFloor}`;
     document.getElementById('difficulty-hud').innerText = `СЛОЖНОСТЬ: ${difficultyName}`;
@@ -873,6 +1032,21 @@ function initGame(resetAll) {
     player.x = width/2; 
     player.y = height/2; 
     loadRoom(0, 0);
+}
+
+function updateRecord() {
+    if (isCheated) return;
+    
+    const diffWeights = {'ЛЕГКО': 1, 'СРЕДНЕ': 2, 'СЛОЖНО': 3};
+    const currentWeight = diffWeights[difficultyName];
+    const bestWeight = diffWeights[saveState.bestDiff];
+    
+    if (currentFloor > saveState.bestFloor || (currentFloor === saveState.bestFloor && currentWeight > bestWeight)) {
+        saveState.bestFloor = currentFloor;
+        saveState.bestDiff = difficultyName;
+        saveGame();
+        updateLobbyRecord();
+    }
 }
 
 function loadRoom(x, y) {
@@ -944,7 +1118,6 @@ function performMeleeHit(x, y, radius, angle, side, damage, attacker = null) {
             
             if (distance < radius + en.r) {
                 if (distance < 5) {
-                    // Если враг очень близко, наносим урон без проверки угла
                     en.hp -= finalDmg;
                     hitSomething = true;
                     
@@ -1048,7 +1221,7 @@ function performMeleeHit(x, y, radius, angle, side, damage, attacker = null) {
         
         if (distance < radius + player.r) {
             if (distance < 5) {
-                takeDamage(damage, side === 'e' && boss !== null);
+                takeDamage(damage, side === 'e' && boss !== null, attacker ? attacker.type : 'враг');
                 hitSomething = true;
             } else {
                 let playerAngle = Math.atan2(dy, dx);
@@ -1056,7 +1229,7 @@ function performMeleeHit(x, y, radius, angle, side, damage, attacker = null) {
                 if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
                 
                 if (angleDiff < arcAngle) {
-                    takeDamage(damage, side === 'e' && boss !== null);
+                    takeDamage(damage, side === 'e' && boss !== null, attacker ? attacker.type : 'враг');
                     hitSomething = true;
                 }
             }
@@ -1073,7 +1246,7 @@ function performMeleeHit(x, y, radius, angle, side, damage, attacker = null) {
             
             if (distance < radius) {
                 let enemyDamage = damage;
-                if (attacker && attacker.type === 'bruiser') enemyDamage *= 1.5;
+                if (attacker && attacker.type === 'громила') enemyDamage *= 1.5;
                 if (attacker && attacker.type === 'kamikaze') enemyDamage *= 2;
                 
                 o.hp -= enemyDamage;
@@ -1091,12 +1264,12 @@ function performMeleeHit(x, y, radius, angle, side, damage, attacker = null) {
 }
 
 function useAbility() {
-    if (abCooldown > 0 || abActiveTimer > 0 || gameState !== 'play') return;
+    if ((abCooldown > 0 && !godMode) || abActiveTimer > 0 || gameState !== 'play') return;
     const p = player, key = `${curX},${curY}`;
     
     if (p.n === "Боец") {
         abActiveTimer = 300;
-        abCooldown = 300;
+        if (!godMode) abCooldown = 300;
     }
     else if (p.n === "Маг") { 
         for(let i=0; i<8; i++) { 
@@ -1107,7 +1280,7 @@ function useAbility() {
                 side: 'p', power: 50 
             }); 
         }
-        abCooldown = 300; 
+        if (!godMode) abCooldown = 300; 
     }
     else if (p.n === "Огр") {
         shake = 25; 
@@ -1168,11 +1341,11 @@ function useAbility() {
         }
         
         if (dungeon[key]) dungeon[key].enemies = enemies;
-        abCooldown = 600;
+        if (!godMode) abCooldown = 600;
     }
     else if (p.n === "Танк") {
         abActiveTimer = 300;
-        abCooldown = 600;
+        if (!godMode) abCooldown = 600;
     }
     else if (p.n === "Ниндзя") {
         let ax = moveDir.x || p.lookDir, ay = moveDir.y, d = Math.hypot(ax, ay) || 1;
@@ -1194,7 +1367,7 @@ function useAbility() {
         attacks.push({ x: p.x, y: p.y, angle: 0, life: 15, side: 'p', radius: 120 });
         performMeleeHit(p.x, p.y, 120, 0, 'p', 60);
         if (dungeon[key]) dungeon[key].enemies = enemies;
-        abCooldown = 120;
+        if (!godMode) abCooldown = 120;
     }
     
     drawMinimap();
@@ -1220,7 +1393,7 @@ function hideFloorCleared() {
     document.getElementById('floor-cleared-msg').classList.remove('show');
 }
 
-function takeDamage(dmg, isBossAttack = false) { 
+function takeDamage(dmg, isBossAttack = false, enemyType = null) { 
     if (godMode) return;
     if (player.n === "Танк" && abActiveTimer > 0) return; 
     
@@ -1232,6 +1405,23 @@ function takeDamage(dmg, isBossAttack = false) {
     player.curHp -= finalDmg; 
     if (player.curHp < 0) player.curHp = 0;
     shake = 10; 
+    
+    if (isBossAttack && boss) {
+        lastDamagedBy = boss.name;
+    } else if (enemyType) {
+        const enemyNames = {
+            'shooter': 'стрелок',
+            'громила': 'громила',
+            'healer': 'медик',
+            'kamikaze': 'камикадзе',
+            'sniper': 'снайпер',
+            'heavy_shooter': 'тяжелый стрелок',
+            'pyro': 'пиромант'
+        };
+        lastDamagedBy = enemyNames[enemyType] || enemyType;
+    } else {
+        lastDamagedBy = 'неизвестно';
+    }
 }
 
 function update() {
@@ -1278,7 +1468,6 @@ function update() {
             }
         }
         
-        // Исправление 3: Стрельба при зажатой ЛКМ
         const weapon = getActiveWeapon();
         const now = Date.now();
         
@@ -1421,10 +1610,14 @@ function update() {
                 collision = true;
             }
             
-            if (checkObstacleCollision(nextX, boss.y, boss.r) || 
-                checkObstacleCollision(boss.x, nextY, boss.r)) {
-                collision = true;
-            }
+            obstacles.forEach((o, i) => {
+                if (checkObstacleCollision(nextX, boss.y, boss.r) || 
+                    checkObstacleCollision(boss.x, nextY, boss.r)) {
+                    o.hp = 0;
+                    obstacles.splice(i, 1);
+                    collision = true;
+                }
+            });
             
             if (!collision) {
                 boss.x = nextX;
@@ -1465,6 +1658,13 @@ function update() {
                     takeDamage(boss.chargeDamage, true);
                     shake = 15;
                 }
+                
+                obstacles.forEach((o, i) => {
+                    if (Math.hypot(boss.x - (o.x + o.w/2), boss.y - (o.y + o.h/2)) < 100) {
+                        o.hp = 0;
+                        obstacles.splice(i, 1);
+                    }
+                });
             }
         } else {
             const angle = Math.atan2(player.y - boss.y, player.x - boss.x);
@@ -1497,10 +1697,10 @@ function update() {
     
     if (abActiveTimer > 0) {
         abActiveTimer--;
-        if (abActiveTimer === 0 && (player.n === "Боец" || player.n === "Танк")) {
+        if (abActiveTimer === 0 && (player.n === "Боец" || player.n === "Танк") && !godMode) {
             abCooldown = 600;
         }
-    } else if (abCooldown > 0) {
+    } else if (abCooldown > 0 && !godMode) {
         abCooldown--;
     }
     
@@ -1659,6 +1859,7 @@ function update() {
     
     if (curX === 0 && curY === 0 && isDungeonClear() && Math.hypot(player.x - width/2, player.y - height/2) < 50) { 
         currentFloor++; 
+        updateRecord();
         initGame(false); 
         return; 
     }
@@ -1784,12 +1985,12 @@ function update() {
                     bullets.push({ 
                         x: en.x, y: en.y, 
                         vx: Math.cos(ang)*7, vy: Math.sin(ang)*7, 
-                        side: 'e', power: 6 
+                        side: 'e', power: 6, shooterType: en.type
                     }); 
                     en.lastShot = n; 
                 } 
                 break;
-            case 'bruiser': 
+            case 'громила': 
                 if (d < 70 && n - en.lastMelee > 1000) { 
                     attacks.push({ 
                         x: en.x, y: en.y, 
@@ -1805,7 +2006,7 @@ function update() {
                     bullets.push({ 
                         x: en.x, y: en.y, 
                         vx: Math.cos(ang)*8, vy: Math.sin(ang)*8, 
-                        side: 'e', power: 4 
+                        side: 'e', power: 4, shooterType: en.type
                     }); 
                     en.lastShot = n; 
                 } 
@@ -1816,7 +2017,7 @@ function update() {
                     bullets.push({ 
                         x: en.x, y: en.y, 
                         vx: Math.cos(ang+s)*6, vy: Math.sin(ang+s)*6, 
-                        side: 'e', isFire: true, power: 2, life: 30 
+                        side: 'e', isFire: true, power: 2, life: 30, shooterType: en.type
                     }); 
                     en.lastShot = n; 
                 } 
@@ -1827,7 +2028,7 @@ function update() {
                     en.et = 42; 
                 } 
                 if (en.state === 'explode' && --en.et <= 0) { 
-                    if(d < 120) takeDamage(70); 
+                    if(d < 120) takeDamage(70, false, en.type); 
                     shake = 15; 
                     enemies.splice(i, 1); 
                     if (dungeon[key]) { 
@@ -1843,16 +2044,6 @@ function update() {
                         rA.forEach(o => { 
                             if(Math.hypot(o.x-en.x, o.y-en.y) < 200) {
                                 o.hp = Math.min(o.maxHp, o.hp + 50);
-                                bullets.push({
-                                    x: en.x, y: en.y,
-                                    vx: (o.x - en.x) / 30,
-                                    vy: (o.y - en.y) / 30,
-                                    side: 'p',
-                                    power: 0,
-                                    isHeal: true,
-                                    life: 30,
-                                    target: o
-                                });
                             }
                         }); 
                         en.lastShot = n; 
@@ -1874,7 +2065,7 @@ function update() {
                     bullets.push({ 
                         x: en.x, y: en.y, 
                         vx: Math.cos(en.aimLock)*22, vy: Math.sin(en.aimLock)*22, 
-                        side: 'e', power: 55 
+                        side: 'e', power: 55, shooterType: en.type
                     }); 
                     en.aiming = 0; 
                     en.aimLock = null; 
@@ -1950,7 +2141,7 @@ function update() {
                 if (b.effect === "slow") slowEffect = 180;
                 bullets.splice(i, 1);
             } else if (!b.isBoss && Math.hypot(b.x - player.x, b.y - player.y) < 25) {
-                takeDamage(b.isFire ? 2 : (b.power || 8)); 
+                takeDamage(b.isFire ? 2 : (b.power || 8), false, b.shooterType); 
                 bullets.splice(i, 1); 
             }
         }
@@ -1993,6 +2184,8 @@ function update() {
         const diffColor = difficultyName === 'СЛОЖНО' ? '#f00' : (difficultyName === 'СРЕДНЕ' ? '#ff0' : '#0f0');
         document.getElementById('final-score').innerHTML = `Вы дошли до ${currentFloor} этажа<br><span style="color:${diffColor}; font-size:12px;">Сложность: ${difficultyName}</span>`;
         
+        document.getElementById('killer-info').innerHTML = `Вас убил: <span style="color:#f00">${lastDamagedBy}</span>`;
+        
         let notice = "";
         if (isCheated) notice = "Рекорд не засчитан (использован Режим Бога)";
         else {
@@ -2013,6 +2206,8 @@ function update() {
         const seconds = Math.floor((timeDiff % 60000) / 1000);
         document.getElementById('time-survived').innerText = `Время забега: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
         
+        saveState.currentRun = null;
+        saveGame();
         showScreen('screen-death'); 
     }
     
@@ -2333,11 +2528,9 @@ function drawWeapon(p, weapon) {
     
     const isLookingLeft = angle > Math.PI/2 || angle < -Math.PI/2;
     
-    // Исправление 1: Смещение оружия ближе к персонажу и правильнее
     const offsetX = 8;
-    const offsetY = 0;
+    const offsetY = -8;
     
-    // Если смотрим влево, отражаем
     if (isLookingLeft) {
         angle += Math.PI;
     }
@@ -2345,7 +2538,6 @@ function drawWeapon(p, weapon) {
     ctx.translate(p.x, p.y);
     ctx.rotate(angle);
     
-    // Отражение для левого направления
     if (isLookingLeft) {
         ctx.scale(-1, 1);
     }
@@ -2515,7 +2707,7 @@ function drawEntity(x, y, colors, lookDir, frame, pObj = null, enObj = null) {
     ctx.translate(x, y); 
     const p = 5;
     
-    if ((pObj && pObj.n === "Огр") || (enObj && enObj.type === "bruiser")) ctx.scale(1.2, 1.2);
+    if ((pObj && pObj.n === "Огр") || (enObj && enObj.type === "громила")) ctx.scale(1.2, 1.2);
     
     if(enObj) { 
         ctx.fillStyle = "#300"; 
@@ -2583,13 +2775,11 @@ function drawEntity(x, y, colors, lookDir, frame, pObj = null, enObj = null) {
         ctx.fillRect(-p*2.5, -p*5.5, p*5, p*3);
     }
     
-    // Исправление 2: Вернули глаза всем сущностям
     ctx.fillStyle = colors[2]; 
     if (enObj && enObj.type === "sniper") { 
         ctx.fillStyle = "#0ff"; 
         ctx.fillRect(0, -p*4.5, p*2, p*1.5); 
     } else { 
-        // Глаза для всех остальных (игрока и врагов)
         ctx.fillRect(p*0.5, -p*4.2, p, p); 
     }
     
@@ -2837,11 +3027,6 @@ function render() {
                 ctx.fillStyle = '#0a5';
                 ctx.beginPath();
                 ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
-                ctx.fill();
-            } else if (b.isHeal) {
-                ctx.fillStyle = '#0f0';
-                ctx.beginPath();
-                ctx.arc(b.x, b.y, 3, 0, Math.PI * 2);
                 ctx.fill();
             } else {
                 ctx.fillStyle = b.side === 'p' ? '#0f0' : (b.isFire ? '#f90' : '#f00'); 
