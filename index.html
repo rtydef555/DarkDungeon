@@ -1,0 +1,3491 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>DarkDungeon: Arsenal Update</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        body { margin: 0; background: #000; color: #0f0; font-family: 'Courier New', monospace; overflow: hidden; touch-action: none; }
+        canvas { display: block; image-rendering: pixelated; }
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        .screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                  background: rgba(0,0,0,0.95); border: 3px solid #0f0; padding: 20px; text-align: center; pointer-events: all; z-index: 1000; min-width: 280px; }
+        .hidden { display: none !important; }
+        button { background: #000; color: #0f0; border: 2px solid #0f0; padding: 12px 24px; cursor: pointer; margin: 5px; font-weight: bold; width: 100%; max-width: 200px; }
+        button:disabled { border-color: #555; color: #555; cursor: not-allowed; }
+        .hud { position: absolute; top: 10px; left: 10px; pointer-events: none; }
+        .bar { width: 160px; height: 16px; border: 1px solid #0f0; margin: 4px 0; background: #222; position: relative; }
+        .fill { height: 100%; transition: width 0.1s; }
+        .bar-text { position: absolute; width: 100%; text-align: center; font-size: 12px; color: #fff; line-height: 16px; font-weight: bold; }
+        .minimap-container { position: absolute; top: 10px; right: 10px; text-align: right; }
+        .minimap { width: 100px; height: 100px; background: rgba(0,0,0,0.7); border: 1px solid #555; position: relative; margin-bottom: 5px; }
+        .floor-counter { color: #0f0; font-weight: bold; font-size: 14px; text-shadow: 1px 1px #000; }
+        .joystick-container { position: absolute; bottom: 50px; width: 100%; display: flex; justify-content: space-between; padding: 0 40px; box-sizing: border-box; pointer-events: none; }
+        .joystick { width: 100px; height: 100px; background: rgba(0,255,0,0.05); border: 2px solid rgba(0,255,0,0.3); border-radius: 50%; position: relative; pointer-events: all; }
+        .stick { width: 40px; height: 40px; background: rgba(0,255,0,0.4); border-radius: 50%; position: absolute; top: 30px; left: 30px; pointer-events: none; }
+        .ability-btn { position: absolute; bottom: 170px; right: 40px; width: 70px; height: 70px; background: rgba(0,255,0,0.2); border: 3px solid #0f0; border-radius: 50%; 
+                        color: #0f0; font-weight: bold; display: flex; align-items: center; justify-content: center; pointer-events: all; font-size: 10px; text-align: center; z-index: 200; }
+        .swap-weapon-btn { position: absolute; bottom: 170px; left: 40px; width: 70px; height: 70px; background: rgba(0,255,0,0.2); border: 3px solid #0af; border-radius: 50%; 
+                        color: #0af; font-weight: bold; display: flex; align-items: center; justify-content: center; pointer-events: all; font-size: 10px; text-align: center; z-index: 200; }
+        .pickup-btn { position: absolute; bottom: 250px; left: 50%; transform: translateX(-50%); width: 120px; height: 40px; background: rgba(0,255,0,0.8); border: 2px solid #0f0; 
+                      color: #000; font-weight: bold; display: flex; align-items: center; justify-content: center; pointer-events: all; font-size: 12px; z-index: 200; }
+        .ability-btn:active, .swap-weapon-btn:active, .pickup-btn:active { background: #0f0; color: #000; }
+        .char-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin: 15px 0; }
+        .char-item { border: 1px solid #444; padding: 5px; cursor: pointer; font-size: 10px; position: relative; }
+        .char-item.active { border-color: #0f0; background: #030; }
+        .char-item.locked { opacity: 0.5; }
+        .char-item.locked::after { content: "🔒"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 14px; }
+        .coin-display { color: #fe0; font-weight: bold; margin-bottom: 10px; font-size: 18px; text-shadow: 1px 1px #000; }
+        .price-tag { color: #fe0; font-size: 14px; }
+        .btn-reset { border-color: #f00; color: #f00; margin-top: 20px; }
+        .btn-reset:active { background: #f00; color: #fff; }
+        .btn-god { border-color: #0af; color: #0af; }
+        .btn-god.on { background: #0af; color: #000; }
+        
+        .confirm-btns { display: flex; gap: 10px; margin-top: 20px; }
+        .btn-yes { border-color: #f00; color: #f00; }
+        .btn-no { border-color: #0f0; color: #0f0; }
+        .diff-btn { margin: 10px auto; display: block; }
+        .diff-easy { border-color: #0f0; color: #0f0; }
+        .diff-med { border-color: #ff0; color: #ff0; }
+        .diff-hard { border-color: #f00; color: #f00; }
+        .pause-btn { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 50px; height: 50px; background: rgba(0,0,0,0.5); border: 2px solid #0f0; color: #0f0; border-radius: 5px; cursor: pointer; pointer-events: all; font-weight: bold; z-index: 3000; }
+        .record-text { color: #0af; font-size: 14px; margin-bottom: 10px; }
+        .diff-tag { font-size: 10px; padding: 2px 4px; border-radius: 3px; margin-left: 5px; vertical-align: middle; }
+
+        #floor-cleared-msg { 
+            position: absolute; top: 25%; left: 0; width: 100%; text-align: center; 
+            font-size: 40px; font-weight: 900; font-style: italic; color: #fff; 
+            text-shadow: 4px 4px #f0f, -4px -4px #0ff; 
+            pointer-events: none; opacity: 0; transform: scale(0.5); transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            letter-spacing: 5px; z-index: 500;
+        }
+        #floor-cleared-msg.show { opacity: 1; transform: scale(1.1); animation: msg-pulse 0.4s infinite alternate; }
+        @keyframes msg-pulse { from { transform: scale(1.1) rotate(-1deg); } to { transform: scale(1.15) rotate(1deg); } }
+        #boss-warning { color: #f0f; font-weight: bold; font-size: 14px; margin-top: 5px; display: none; text-shadow: 1px 1px #000; }
+        .weapon-hud { position: absolute; top: 50px; left: 10px; color: #0af; font-size: 12px; pointer-events: none; }
+        .run-time { color: #0ff; font-size: 14px; margin: 5px 0; font-weight: bold; }
+        .how-to-play { text-align: left; font-size: 13px; line-height: 1.4; margin: 15px 0; color: #aaa; max-width: 300px; }
+        .how-to-play ol { padding-left: 20px; margin: 10px 0; }
+        .how-to-play li { margin-bottom: 8px; }
+        
+        .promo-section { margin-top: 20px; border-top: 1px solid #333; padding-top: 15px; }
+        .promo-input { background: #000; color: #0f0; border: 1px solid #0f0; padding: 8px; width: 100%; margin: 10px 0; font-family: 'Courier New'; }
+        .killer-info { color: #f00; font-weight: bold; margin: 10px 0; }
+        
+        @media (min-width: 768px) {
+            .joystick-container, .ability-btn, .swap-weapon-btn, .pickup-btn {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="floor-cleared-msg">ЭТАЖ ЗАЧИЩЕН</div>
+    <div class="ui-layer">
+        <button id="ingame-pause-btn" class="pause-btn hidden" onclick="togglePause()">||</button>
+        <div id="screen-lobby" class="screen">
+            <h1>DARK DUNGEON</h1>
+            <div id="lobby-record" class="record-text">РЕКОРД: 1 ЭТАЖ</div>
+            <div class="coin-display">💰 <span id="lobby-coins">0</span></div>
+            <button id="continue-btn" onclick="continueGame()" disabled>ПРОДОЛЖИТЬ</button>
+            <button onclick="showScreen('screen-char')">ИГРАТЬ</button>
+            <button onclick="showScreen('screen-settings')" style="border-color:#aaa; color:#aaa; font-size: 12px; padding: 8px;">НАСТРОЙКИ</button>
+        </div>
+        <div id="screen-settings" class="screen hidden">
+            <h3>НАСТРОЙКИ</h3>
+            <button class="god-toggle-btn btn-god" id="god-mode-btn" onclick="tryToggleGodMode()" disabled>РЕЖИМ БОГА: ВЫКЛ</button>
+            <div class="promo-section">
+                <h4>ПРОМОКОД</h4>
+                <input type="text" id="promo-code-input" class="promo-input" placeholder="Введите промокод">
+                <button onclick="applyPromoCode()">АКТИВИРОВАТЬ</button>
+            </div>
+            <button onclick="showScreen('screen-howtoplay')" style="margin-top:10px;">КАК ИГРАТЬ?</button>
+            <p style="font-size: 12px; color: #888; margin-top: 15px;">Управление игровыми данными</p>
+            <button class="btn-reset" onclick="resetProgress()">СБРОСИТЬ ПРОГРЕСС</button>
+            <button onclick="showScreen('screen-lobby')" style="margin-top:20px; border-color:#555; font-size:12px; padding:5px;">НАЗАД</button>
+        </div>
+        <div id="screen-howtoplay" class="screen hidden">
+            <h3>КАК ИГРАТЬ?</h3>
+            <div class="how-to-play">
+                <ol>
+                    <li><b>Выберите героя</b> - каждый имеет уникальное оружие и способность</li>
+                    <li><b>Начните игру</b> - выберите сложность и начните забег</li>
+                    <li><b>Очищайте комнаты</b> от монстров</li>
+                    <li><b>После очистки этажа</b>, пройдите в стартовую комнату (отмечена 🏠 на карте)</li>
+                    <li><b>Очищайте этажи один за другим!</b></li>
+                </ol>
+                <p>Собирайте монеты 💰 для покупки новых героев!</p>
+            </div>
+            <button onclick="showScreen('screen-settings')" style="margin-top:15px;">НАЗАД</button>
+        </div>
+        <div id="screen-pause" class="screen hidden">
+            <h3>ПАУЗА</h3>
+            <button class="god-toggle-btn btn-god" id="god-mode-btn-pause" onclick="tryToggleGodMode()" disabled>РЕЖИМ БОГА: ВКЛ</button>
+            <button onclick="togglePause()" style="margin-top:10px; border-color:#0f0;">ПРОДОЛЖИТЬ</button>
+            <button onclick="confirmExitToMenu()" style="margin-top:10px; border-color:#f00; color:#f00;">В МЕНЮ</button>
+        </div>
+        <div id="screen-confirm" class="screen hidden">
+            <h3 style="color: #f00;">ВНИМАНИЕ!</h3>
+            <p id="confirm-text" style="font-size: 14px;">Все купленные герои и монеты будут удалены безвозвратно.<br><br>Вы уверены?</p>
+            <div class="confirm-btns">
+                <button class="btn-yes" id="confirm-btn-yes" onclick="confirmReset(true)">ДА</button>
+                <button class="btn-no" onclick="closeConfirm()">ОТМЕНА</button>
+            </div>
+        </div>
+        <div id="screen-exit-confirm" class="screen hidden">
+            <h3 style="color: #f00;">ПОДТВЕРЖДЕНИЕ</h3>
+            <p id="exit-confirm-text" style="font-size: 14px;">Вы уверены что хотите выйти в меню?<br>Это действие нельзя отменить</p>
+            <div class="confirm-btns">
+                <button class="btn-yes" onclick="exitToMenu()">ОК</button>
+                <button class="btn-no" onclick="cancelExit()">ОТМЕНА</button>
+            </div>
+        </div>
+        <div id="screen-char" class="screen hidden">
+            <h3>ГЕРОИ</h3>
+            <div class="coin-display" style="font-size:14px">БАЛАНС: <span id="char-coins">0</span> 💰</div>
+            <div id="char-list" class="char-grid"></div>
+            <div id="char-stats" style="border: 1px solid #0f0; padding: 10px; margin-bottom: 10px; text-align: left; font-size: 13px;">
+                <b id="stat-name">-</b> <span id="stat-price" class="price-tag"></span><br>
+                HP: <span id="stat-hp">-</span><br>
+                Оружие: <span id="stat-wpn">-</span><br>
+                Навык: <span id="stat-ab-desc" style="color:#0af">-</span>
+            </div>
+            <button id="btn-select-char" onclick="handleCharAction()">ВЫБРАТЬ</button>
+            <button onclick="showScreen('screen-lobby')" style="margin-top:5px; border-color:#555; font-size:12px; padding:5px;">НАЗАД</button>
+        </div>
+        <div id="screen-difficulty" class="screen hidden">
+            <h3>СЛОЖНОСТЬ</h3>
+            <button class="diff-btn diff-easy" onclick="setDifficulty(0.5, 'ЛЕГКО')">ЛЕГКАЯ</button>
+            <button class="diff-btn diff-med" onclick="setDifficulty(1.0, 'СРЕДНЕ')">СРЕДНЯЯ</button>
+            <button class="diff-btn diff-hard" onclick="setDifficulty(2.0, 'СЛОЖНО')">СЛОЖНАЯ</button>
+            <button onclick="showScreen('screen-char')" style="margin-top:15px; border-color:#555; font-size:12px;">НАЗАД К ГЕРОЯМ</button>
+        </div>
+        <div id="screen-death" class="screen hidden">
+            <h1 style="color:red">ГЕРОЙ ПАЛ</h1>
+            <p id="final-score"></p>
+            <div class="killer-info" id="killer-info"></div>
+            <p id="record-notice" style="color:#0af; font-size:12px;"></p>
+            <div class="run-time" id="time-survived"></div>
+            <div class="coin-display">Всего монет: <span id="death-coins">0</span></div>
+            <button onclick="location.reload()">В МЕНЮ</button>
+        </div>
+        <div id="hud" class="hud hidden">
+            <div class="bar">
+                <div id="hp-fill" class="fill" style="background: #f00;"></div>
+                <div id="hp-text" class="bar-text">0 / 0</div>
+            </div>
+            <div style="color: #fe0; font-weight: bold; font-size: 14px; margin-top: 5px; text-shadow: 1px 1px #000;">
+                💰 <span id="hud-coins">0</span>
+            </div>
+            <div id="boss-warning">⚠ БОСС!</div>
+            <div class="weapon-hud">
+                <div>Оружие 1: <span id="weapon1-name">-</span></div>
+                <div>Оружие 2: <span id="weapon2-name">-</span></div>
+            </div>
+        </div>
+        <div class="minimap-container hidden" id="mmap-cont">
+            <div id="mmap" class="minimap"></div>
+            <div id="floor-val" class="floor-counter">ЭТАЖ: 1</div>
+            <div id="difficulty-hud" style="color: #0f0; font-size: 12px; margin-top: 2px;">СЛОЖНОСТЬ: СРЕДНЕ</div>
+        </div>
+        <div id="controls" class="joystick-container hidden">
+            <div class="swap-weapon-btn" id="swap-weapon-btn">SWAP<br>WEAPON</div>
+            <div class="joystick" id="move-joy"><div class="stick" id="move-stick"></div></div>
+            <div id="btn-ability" class="ability-btn">SKILL<br>READY</div>
+            <div class="joystick" id="shoot-joy"><div class="stick" id="shoot-stick"></div></div>
+        </div>
+        <div class="pickup-btn hidden" id="pickup-btn">ПОДОБРАТЬ</div>
+    </div>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let width, height, shake = 0;
+
+let saveState = { coins: 0, unlocked: ["Боец"], bestFloor: 1, bestDiff: 'ЛЕГКО', currentRun: null, godModeUnlocked: false };
+let godMode = false, isCheated = false, difficultyMultiplier = 1.0, difficultyName = 'СРЕДНЕ';
+let isPaused = false, anyRoomCleared = false, floorClearedMessageShown = false;
+let roomEntryCooldown = 0;
+let startTime = 0, endTime = 0, timePlayed = 0;
+let lastDamagedBy = null;
+
+let keys = {};
+let mouse = { x: 0, y: 0, shoot: false, ability: false, shootPressed: false, abilityPressed: false };
+let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+const weaponTypes = {
+    shotgun: { name: "Дробовик", type: "shotgun", damage: 15, speed: 700, spread: 5, color: "#222", length: 25, bulletSpeed: 14 },
+    rifle: { name: "Автомат", type: "range", damage: 30, speed: 333, color: "#333", length: 20, bulletSpeed: 12 },
+    katana: { name: "Катана", type: "melee", damage: 40, speed: 350, radius: 90, color: "#39f", length: 20 },
+    club: { name: "Дубина", type: "melee", damage: 60, speed: 450, radius: 100, color: "#964", length: 22 },
+    rifle_sniper: { name: "Винтовка", type: "range", damage: 150, speed: 1500, color: "#333", length: 25, bulletSpeed: 25 },
+    flamethrower: { name: "Огнемёт", type: "range", damage: 5, speed: 100, color: "#f60", length: 20, bulletSpeed: 8, spread: 0.3, life: 25 }
+};
+
+const defaultWeapons = {
+    "Боец": weaponTypes.rifle,
+    "Маг": { name: "Жезл", type: "range", damage: 30, speed: 250, color: "#a5f", length: 18, bulletSpeed: 12, isDefault: true },
+    "Огр": weaponTypes.club,
+    "Танк": weaponTypes.shotgun,
+    "Ниндзя": weaponTypes.katana,
+    "Охотник": weaponTypes.rifle_sniper
+};
+
+let playerWeapons = [{}, {}];
+let activeWeaponSlot = 0, swapCooldown = 0, weaponToPickup = null;
+let justDroppedWeapon = null, dropCooldown = 0;
+
+const characters = [
+    { n: "Боец", price: 0, hp: 120, w: "Автомат", type: "range", ab: "Ярость", ad: "Ускоренная стрельба", c: ["#666","#999","#fff","#333"], wc: "#333", wl: 20, speed: 6 },
+    { n: "Ниндзя", price: 100, hp: 100, w: "Катана", type: "melee", ab: "Рывок", ad: "Быстрый пролет сквозь врагов", c: ["#111","#222","#f00","#000"], wc: "#39f", wl: 20, speed: 8 },
+    { n: "Маг", price: 150, hp: 80, w: "Жезл", type: "range", ab: "Вспышка", ad: "Кольцо магических искр", c: ["#226","#55a","#aaf","#404"], wc: "#a5f", wl: 18, speed: 6 },
+    { n: "Огр", price: 250, hp: 200, w: "Дубина", type: "melee", ab: "Топот", ad: "Оглушающая волна и отброс", c: ["#452","#683","#fff","#231"], wc: "#964", wl: 22, speed: 4 },
+    { n: "Танк", price: 350, hp: 250, w: "Дробовик", type: "shotgun", ab: "Щит", ad: "Временная неуязвимость", c: ["#555","#333","#fff","#111"], wc: "#222", wl: 25, speed: 4 },
+    { n: "Охотник", price: 250, hp: 150, w: "Винтовка", type: "range", ab: "Капкан", ad: "Капкан: смертельная ловушка с оглушением", c: ["#382","#c18c5d","#fff","#261"], wc: "#333", wl: 25, speed: 6 }
+];
+
+const bosses = [
+    { name: "Тёмный рыцарь", colors: ["#111", "#333", "#000", "#222"], type: "knight", attacks: [{ name: "Удар", damage: { easy: 30, medium: 50, hard: 75 }, cooldown: 1500 }, { name: "Рывок", damage: { easy: 50, medium: 75, hard: 115 }, cooldown: 3000, chargeTime: 60 }], getHp: (diff) => diff === "ЛЕГКО" ? 1000 : diff === "СРЕДНЕ" ? 1500 : 2000, speed: 1.8, size: 1.5, pattern: "melee" },
+    { name: "Слизень", colors: ["#0a5", "#2d8", "#000", "#083"], type: "slime", attacks: [{ name: "Прыжок", damage: { easy: 40, medium: 60, hard: 80 }, cooldown: 2000, chargeTime: 50 }, { name: "Бросок слизи", damage: { easy: 20, medium: 35, hard: 50 }, cooldown: 3000, effect: "slow" }], getHp: (diff) => diff === "ЛЕГКО" ? 1500 : diff === "СРЕДНЕ" ? 2000 : 2500, speed: 1.2, size: 1.8, pattern: "ranged" },
+    { name: "Минотавр", colors: ["#743", "#964", "#000", "#531"], type: "minotaur", attacks: [{ name: "Удар", damage: { easy: 35, medium: 50, hard: 75 }, cooldown: 1200 }, { name: "Бросок топора", damage: { easy: 75, medium: 90, hard: 115 }, cooldown: 2500, chargeTime: 40 }], getHp: (diff) => diff === "ЛЕГКО" ? 1000 : diff === "СРЕДНЕ" ? 1500 : 2000, speed: 1.5, size: 1.6, pattern: "mixed" }
+];
+
+let player, gameState = 'lobby', curX = 0, curY = 0, dungeon = {}, currentFloor = 1;
+let enemies = [], bullets = [], items = [], attacks = [], roomDoors = [], obstacles = [], droppedCoins = [];
+let selectedIdx = 0, moveDir = { x: 0, y: 0 }, shootDir = { x: 0, y: 0 };
+let abCooldown = 0, abActiveTimer = 0, boss = null, slowEffect = 0, isBossRoom = false, cameFromDir = null;
+let bossStunTimer = 0;
+let nextEnemyId = 1;
+let currentTraps = [];
+
+function loadGame() {
+    const data = localStorage.getItem('pd_balanced_save_v1');
+    if (data) {
+        const parsed = JSON.parse(data);
+        saveState.coins = parsed.coins || 0;
+        saveState.unlocked = parsed.unlocked || ["Боец"];
+        saveState.bestFloor = parsed.bestFloor || 1;
+        saveState.bestDiff = parsed.bestDiff || 'ЛЕГКО';
+        saveState.currentRun = parsed.currentRun || null;
+        saveState.godModeUnlocked = parsed.godModeUnlocked || false;
+    }
+    updateCoinDisplays();
+    updateGodModeUI();
+    updateLobbyRecord();
+    updateContinueButton();
+}
+
+function updateContinueButton() {
+    const btn = document.getElementById('continue-btn');
+    if (saveState.currentRun) {
+        btn.disabled = false;
+        btn.style.borderColor = "#0f0";
+        btn.style.color = "#0f0";
+    } else {
+        btn.disabled = true;
+        btn.style.borderColor = "#555";
+        btn.style.color = "#555";
+    }
+}
+
+function updateLobbyRecord() {
+    const color = saveState.bestDiff === 'СЛОЖНО' ? '#f00' : (saveState.bestDiff === 'СРЕДНЕ' ? '#ff0' : '#0f0');
+    document.getElementById('lobby-record').innerHTML = `РЕКОРД: ${saveState.bestFloor} ЭТАЖ <span class="diff-tag" style="border: 1px solid ${color}; color: ${color}">${saveState.bestDiff}</span>`;
+}
+
+function saveGame() {
+    localStorage.setItem('pd_balanced_save_v1', JSON.stringify(saveState));
+    updateCoinDisplays();
+}
+
+function updateCoinDisplays() {
+    document.getElementById('lobby-coins').innerText = saveState.coins;
+    document.getElementById('char-coins').innerText = saveState.coins;
+    document.getElementById('hud-coins').innerText = saveState.coins;
+    document.getElementById('death-coins').innerText = saveState.coins;
+}
+
+function tryToggleGodMode() {
+    if (!saveState.godModeUnlocked) return;
+    
+    if (!godMode) {
+        document.getElementById('confirm-text').innerHTML = "ВКЛЮЧИТЬ РЕЖИМ БОГА?<br><span style='color:#0af; font-size:12px;'>Внимание: этот забег не будет засчитан в рекорд!</span>";
+        document.getElementById('confirm-btn-yes').onclick = () => { 
+            godMode = true; 
+            isCheated = true; 
+            updateGodModeUI(); 
+            showScreen(gameState === 'play' || gameState === 'paused' ? 'screen-pause' : 'screen-settings');
+        };
+        showScreen('screen-confirm');
+    } else {
+        godMode = false;
+        updateGodModeUI();
+    }
+}
+
+function closeConfirm() {
+    showScreen(gameState === 'play' || gameState === 'paused' ? 'screen-pause' : 'screen-settings');
+}
+
+function updateGodModeUI() {
+    const btns = document.querySelectorAll('.god-toggle-btn');
+    btns.forEach(btn => {
+        btn.disabled = !saveState.godModeUnlocked;
+        if (!saveState.godModeUnlocked) {
+            btn.style.borderColor = "#555";
+            btn.style.color = "#555";
+        } else if (godMode) {
+            btn.innerText = "РЕЖИМ БОГА: ВКЛ";
+            btn.classList.add('on');
+        } else {
+            btn.innerText = "РЕЖИМ БОГА: ВЫКЛ";
+            btn.classList.remove('on');
+        }
+    });
+}
+
+function applyPromoCode() {
+    const input = document.getElementById('promo-code-input');
+    const code = input.value.trim();
+    
+    if (code === "godmodeon") {
+        saveState.godModeUnlocked = true;
+        saveGame();
+        updateGodModeUI();
+        alert("Режим бога разблокирован!");
+        showScreen('screen-settings');
+    } else if (code === "godmodeoff") {
+        saveState.godModeUnlocked = false;
+        godMode = false;
+        saveGame();
+        updateGodModeUI();
+        alert("Режим бога заблокирован!");
+        showScreen('screen-settings');
+    } else if (code.startsWith("rtyteamisgood")) {
+        const coins = parseInt(code.replace("rtyteamisgood", ""));
+        if (!isNaN(coins) && coins > 0) {
+            saveState.coins += coins;
+            saveGame();
+            alert(`Промокод активирован! Получено ${coins} монет.`);
+            showScreen('screen-settings');
+        } else {
+            alert("Неверный промокод");
+        }
+    } else {
+        alert("Неверный промокод");
+    }
+    input.value = "";
+}
+
+function togglePause() {
+    if (gameState !== 'play' && gameState !== 'paused') return;
+    isPaused = !isPaused;
+    if (isPaused) {
+        gameState = 'paused';
+        showScreen('screen-pause');
+    } else {
+        gameState = 'play';
+        showScreen('none');
+    }
+}
+
+function resetProgress() { 
+    document.getElementById('confirm-text').innerHTML = "Все купленные герои и монеты будут удалены безвозвратно.<br><br>Вы уверены?";
+    document.getElementById('confirm-btn-yes').onclick = () => confirmReset(true);
+    showScreen('screen-confirm'); 
+}
+
+function confirmReset(result) {
+    if (result) {
+        saveState = { coins: 0, unlocked: ["Боец"], bestFloor: 1, bestDiff: 'ЛЕГКО', currentRun: null, godModeUnlocked: false };
+        godMode = false;
+        isCheated = false;
+        saveGame();
+        updateGodModeUI();
+        selectedIdx = 0;
+        updateLobbyRecord();
+        updateContinueButton();
+        showScreen('screen-lobby');
+    } else showScreen('screen-settings');
+}
+
+function confirmExitToMenu() {
+    document.getElementById('exit-confirm-text').innerHTML = "Вы уверены что хотите выйти в меню?<br>Это действие нельзя отменить";
+    showScreen('screen-exit-confirm');
+}
+
+function cancelExit() {
+    showScreen('screen-pause');
+}
+
+function exitToMenu() {
+    if (gameState === 'play' || gameState === 'paused') {
+        const timePlayed = Date.now() - startTime;
+        saveState.currentRun = {
+            selectedCharIndex: selectedIdx,
+            currentFloor: currentFloor,
+            difficultyMultiplier: difficultyMultiplier,
+            difficultyName: difficultyName,
+            player: JSON.parse(JSON.stringify(player)),
+            dungeon: JSON.parse(JSON.stringify(dungeon)),
+            curX: curX,
+            curY: curY,
+            playerWeapons: JSON.parse(JSON.stringify(playerWeapons)),
+            activeWeaponSlot: activeWeaponSlot,
+            timePlayed: timePlayed
+        };
+        saveGame();
+    }
+    location.reload();
+}
+
+function continueGame() {
+    if (!saveState.currentRun) return;
+    
+    const run = saveState.currentRun;
+    selectedIdx = run.selectedCharIndex;
+    currentFloor = run.currentFloor;
+    difficultyMultiplier = run.difficultyMultiplier;
+    difficultyName = run.difficultyName;
+    player = run.player;
+    dungeon = run.dungeon;
+    curX = run.curX;
+    curY = run.curY;
+    playerWeapons = run.playerWeapons;
+    activeWeaponSlot = run.activeWeaponSlot;
+    timePlayed = run.timePlayed || 0;
+    startTime = Date.now() - timePlayed;
+    
+    const key = `${curX},${curY}`;
+    const room = dungeon[key];
+    if (room) {
+        enemies = room.enemies || [];
+        items = room.items || [];
+        obstacles = room.obs || [];
+        droppedCoins = room.droppedCoins || [];
+        roomDoors = room.doors || [];
+        isBossRoom = room.boss || false;
+        cameFromDir = room.entranceDir || null;
+        currentTraps = room.traps || [];
+        
+        for (let enemy of enemies) {
+            if (enemy.type === 'dark_mage') {
+                enemy.lastBuff = enemy.lastBuff || Date.now() + Math.random() * 1000;
+                enemy.buffCooldown = enemy.buffCooldown || 3000;
+                enemy.buffedEnemies = enemy.buffedEnemies || [];
+            }
+        }
+        
+        if (isBossRoom && !room.cleared) {
+            const bossTypeName = room.bossType || "knight";
+            const bossType = bosses.find(b => b.type === bossTypeName) || bosses[0];
+            boss = {
+                ...bossType,
+                x: width/2,
+                y: height/2,
+                curHp: bossType.getHp(difficultyName),
+                maxHp: bossType.getHp(difficultyName),
+                lastAttack: Date.now(),
+                attackCooldown: 0,
+                state: "idle",
+                r: 30 * bossType.size,
+                frame: 0,
+                dead: false,
+                deathTimer: 0,
+                stunTimer: 0
+            };
+        } else {
+            boss = null;
+        }
+    }
+    
+    gameState = 'play';
+    showScreen('none');
+    document.getElementById('hud').classList.remove('hidden');
+    document.getElementById('mmap-cont').classList.remove('hidden');
+    if (isMobile) {
+        document.getElementById('controls').classList.remove('hidden');
+    }
+    document.getElementById('ingame-pause-btn').classList.remove('hidden');
+    document.getElementById('floor-val').innerText = `ЭТАЖ: ${currentFloor}`;
+    document.getElementById('difficulty-hud').innerText = `СЛОЖНОСТЬ: ${difficultyName}`;
+    document.getElementById('difficulty-hud').style.color = difficultyName === 'СЛОЖНО' ? '#f00' : (difficultyName === 'СРЕДНЕ' ? '#ff0' : '#0f0');
+    anyRoomCleared = false;
+    floorClearedMessageShown = false;
+    hideFloorCleared();
+    hidePickupButton();
+    updateWeaponHUD();
+    drawMinimap();
+}
+
+function setupControls() {
+    if (!isMobile) {
+        window.addEventListener('keydown', (e) => { 
+            keys[e.key.toLowerCase()] = true; 
+            
+            if (e.key === 'r' || e.key === 'к') {
+                if (!isPaused) swapWeapon();
+            }
+            
+            if (e.key === 'f' || e.key === 'а') {
+                if (!isPaused && weaponToPickup) {
+                    pickupWeapon();
+                }
+            }
+            
+            if (e.key === 'p' || e.key === 'з') {
+                togglePause();
+            }
+        });
+        window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+    } else {
+        setupJoystick('move-joy', 'move-stick', 'move');
+        setupJoystick('shoot-joy', 'shoot-stick', 'shoot');
+    }
+    
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = e.clientX - rect.left;
+        mouse.y = e.clientY - rect.top;
+    });
+    
+    canvas.addEventListener('mousedown', (e) => {
+        if (e.button === 0) { mouse.shoot = true; mouse.shootPressed = true; }
+        if (e.button === 2) { mouse.ability = true; mouse.abilityPressed = true; }
+        e.preventDefault();
+    });
+    
+    canvas.addEventListener('mouseup', (e) => {
+        if (e.button === 0) mouse.shoot = false;
+        if (e.button === 2) mouse.ability = false;
+        e.preventDefault();
+    });
+    
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    
+    if (isMobile) {
+        document.getElementById('swap-weapon-btn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            swapWeapon();
+        }, {passive: false});
+        
+        document.getElementById('btn-ability').addEventListener('touchstart', (e) => {
+            e.preventDefault(); 
+            useAbility();
+        }, {passive: false});
+        
+        document.getElementById('pickup-btn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            pickupWeapon();
+        }, {passive: false});
+    }
+}
+
+function setupJoystick(id, stickId, type) {
+    const joy = document.getElementById(id), stick = document.getElementById(stickId);
+    let tid = null;
+    const upd = (t) => {
+        if (isPaused) return;
+        const r = joy.getBoundingClientRect();
+        let dx = t.clientX - (r.left + r.width/2), dy = t.clientY - (r.top + r.height/2);
+        const d = Math.min(Math.hypot(dx, dy), 40), a = Math.atan2(dy, dx);
+        stick.style.transform = `translate(${Math.cos(a)*d}px, ${Math.sin(a)*d}px)`;
+        const v = { x: Math.cos(a)*(d/40), y: Math.sin(a)*(d/40) };
+        if(type==='move') moveDir = v; else shootDir = v;
+    };
+    joy.addEventListener('touchstart', e => { if(tid===null){ tid=e.changedTouches[0].identifier; upd(e.changedTouches[0]); } e.preventDefault(); }, {passive:false});
+    window.addEventListener('touchmove', e => { for(let t of e.changedTouches) if(t.identifier===tid) upd(t); }, {passive:false});
+    window.addEventListener('touchend', e => { for(let t of e.changedTouches) if(t.identifier===tid){ tid=null; stick.style.transform='translate(0,0)'; if(type==='move') moveDir={x:0,y:0}; else shootDir={x:0,y:0}; } });
+}
+
+function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+    if(id !== 'none' && document.getElementById(id)) {
+        document.getElementById(id).classList.remove('hidden');
+        if(id === 'screen-char') initCharList();
+        if(id === 'screen-lobby') updateContinueButton();
+    }
+}
+
+function initCharList() {
+    const list = document.getElementById('char-list');
+    list.innerHTML = ''; 
+    characters.forEach((c, i) => {
+        const d = document.createElement('div');
+        const isUnlocked = saveState.unlocked.includes(c.n);
+        d.className = 'char-item' + (i === selectedIdx ? ' active' : '') + (isUnlocked ? '' : ' locked');
+        d.innerText = c.n;
+        d.onclick = () => { selectedIdx = i; updateCharStats(c); initCharList(); };
+        list.appendChild(d);
+    });
+    updateCharStats(characters[selectedIdx]);
+}
+
+function updateCharStats(c) {
+    const isUnlocked = saveState.unlocked.includes(c.n);
+    const btn = document.getElementById('btn-select-char');
+    document.getElementById('stat-name').innerText = c.n;
+    document.getElementById('stat-hp').innerText = c.hp;
+    document.getElementById('stat-wpn').innerText = c.w;
+    document.getElementById('stat-ab-desc').innerText = `${c.ab}: ${c.ad}`;
+    if (isUnlocked) {
+        document.getElementById('stat-price').innerText = "ВЛАДЕНИЕ";
+        document.getElementById('stat-price').style.color = "#0f0";
+        btn.innerText = "ВЫБРАТЬ";
+        btn.style.borderColor = "#0f0"; btn.style.color = "#0f0";
+    } else {
+        document.getElementById('stat-price').innerText = `ЦЕНА: ${c.price} 💰`;
+        document.getElementById('stat-price').style.color = "#fe0";
+        btn.innerText = `КУПИТЬ (${c.price} 💰)`;
+        btn.style.borderColor = saveState.coins >= c.price ? "#fe0" : "#555";
+        btn.style.color = saveState.coins >= c.price ? "#fe0" : "#555";
+    }
+}
+
+function handleCharAction() {
+    const char = characters[selectedIdx];
+    if (saveState.unlocked.includes(char.n)) {
+        showScreen('screen-difficulty'); 
+    }
+    else if (saveState.coins >= char.price) {
+        saveState.coins -= char.price;
+        saveState.unlocked.push(char.n);
+        saveGame(); initCharList();
+    }
+}
+
+function setDifficulty(mult, name) {
+    difficultyMultiplier = mult;
+    difficultyName = name;
+    isCheated = godMode; 
+    initGame(true);
+}
+
+function initPlayerWeapons(character) {
+    playerWeapons[0] = { ...defaultWeapons[character.n], isDefault: true };
+    playerWeapons[1] = {};
+    activeWeaponSlot = 0;
+    updateWeaponHUD();
+}
+
+function getActiveWeapon() {
+    return playerWeapons[activeWeaponSlot];
+}
+
+function swapWeapon() {
+    if (swapCooldown > 0 || isPaused) return;
+    
+    let newSlot = -1;
+    for (let i = 1; i <= 2; i++) {
+        const slot = (activeWeaponSlot + i) % 2;
+        if (playerWeapons[slot] && Object.keys(playerWeapons[slot]).length > 0) {
+            newSlot = slot;
+            break;
+        }
+    }
+    
+    if (newSlot !== -1 && newSlot !== activeWeaponSlot) {
+        activeWeaponSlot = newSlot;
+        swapCooldown = 20;
+        updateWeaponHUD();
+    }
+}
+
+function updateWeaponHUD() {
+    const weapon1 = playerWeapons[0];
+    const weapon2 = playerWeapons[1];
+    
+    document.getElementById('weapon1-name').textContent = weapon1.name || "Пусто";
+    document.getElementById('weapon2-name').textContent = weapon2.name || "Пусто";
+    
+    const slot1 = document.getElementById('weapon1-name');
+    const slot2 = document.getElementById('weapon2-name');
+    
+    slot1.style.color = activeWeaponSlot === 0 ? "#0f0" : "#0af";
+    slot2.style.color = activeWeaponSlot === 1 ? "#0f0" : "#0af";
+    slot1.style.fontWeight = activeWeaponSlot === 0 ? "bold" : "normal";
+    slot2.style.fontWeight = activeWeaponSlot === 1 ? "bold" : "normal";
+}
+
+function showPickupButton(weapon) {
+    if (justDroppedWeapon && justDroppedWeapon === weapon) return;
+    if ((playerWeapons[0] && playerWeapons[0].name === weapon.name) ||
+        (playerWeapons[1] && playerWeapons[1].name === weapon.name)) {
+        return;
+    }
+    weaponToPickup = weapon;
+    const btn = document.getElementById('pickup-btn');
+    btn.classList.remove('hidden');
+    btn.innerText = `ПОДОБРАТЬ ${weapon.name}`;
+}
+
+function hidePickupButton() {
+    weaponToPickup = null;
+    document.getElementById('pickup-btn').classList.add('hidden');
+}
+
+function pickupWeapon() {
+    if (!weaponToPickup || isPaused) return;
+    
+    const weapon = { ...weaponToPickup };
+    
+    let emptySlot = -1;
+    for (let i = 0; i < 2; i++) {
+        if (!playerWeapons[i] || Object.keys(playerWeapons[i]).length === 0) {
+            emptySlot = i;
+            break;
+        }
+    }
+    
+    if (emptySlot !== -1) {
+        playerWeapons[emptySlot] = weapon;
+        updateWeaponHUD();
+    } else {
+        dropWeaponOnGround(player.x + 30, player.y, getActiveWeapon());
+        playerWeapons[activeWeaponSlot] = weapon;
+        updateWeaponHUD();
+    }
+    
+    const key = `${curX},${curY}`;
+    const roomDroppedCoins = dungeon[key] ? dungeon[key].droppedCoins : droppedCoins;
+    
+    for (let i = roomDroppedCoins.length - 1; i >= 0; i--) {
+        const coin = roomDroppedCoins[i];
+        if (coin.isWeapon && coin.weapon === weaponToPickup) {
+            roomDroppedCoins.splice(i, 1);
+            break;
+        }
+    }
+    
+    for (let i = droppedCoins.length - 1; i >= 0; i--) {
+        const coin = droppedCoins[i];
+        if (coin.isWeapon && coin.weapon === weaponToPickup) {
+            droppedCoins.splice(i, 1);
+            break;
+        }
+    }
+    
+    hidePickupButton();
+}
+
+function dropWeaponOnGround(x, y, weapon) {
+    if (!weapon || Object.keys(weapon).length === 0) return;
+    
+    const weaponCopy = { ...weapon };
+    justDroppedWeapon = weaponCopy;
+    dropCooldown = 30;
+    
+    droppedCoins.push({
+        x: x,
+        y: y,
+        life: 0,
+        isWeapon: true,
+        weapon: weaponCopy
+    });
+    
+    const key = `${curX},${curY}`;
+    if (dungeon[key]) {
+        dungeon[key].droppedCoins.push({
+            x: x,
+            y: y,
+            life: 0,
+            isWeapon: true,
+            weapon: weaponCopy
+        });
+    }
+}
+
+function spawnWeaponFromChest(x, y, weaponType) {
+    const weapon = { ...weaponTypes[weaponType] };
+    
+    droppedCoins.push({
+        x: x + 40,
+        y: y,
+        life: 0,
+        isWeapon: true,
+        weapon: weapon
+    });
+}
+
+function createObstacles() {
+    let obs = []; 
+    const gridSize = 60;
+    const maxAttempts = 100;
+    const minDistance = 80;
+    
+    for(let i=0; i<8; i++) {
+        let attempts = 0;
+        let placed = false;
+        while(!placed && attempts < maxAttempts) {
+            let ox = Math.floor(Math.random()*(width/gridSize-4)+2)*gridSize;
+            let oy = Math.floor(Math.random()*(height/gridSize-4)+2)*gridSize;
+            
+            if (Math.hypot(ox - width/2, oy - height/2) > 120) {
+                let tooClose = false;
+                for(let j=0; j<obs.length; j++) {
+                    let o = obs[j];
+                    if(Math.hypot(ox - o.x, oy - o.y) < minDistance) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+                if(!tooClose) {
+                    obs.push({ x: ox, y: oy, w: gridSize-5, h: gridSize-5, destructible: Math.random() > 0.4, hp: 60 });
+                    placed = true;
+                }
+            }
+            attempts++;
+        }
+    }
+    return obs;
+}
+
+function checkObstacleCollision(nx, ny, radius, obsList = obstacles) {
+    for (let o of obsList) if (nx + radius > o.x && nx - radius < o.x + o.w && ny + radius > o.y && ny - radius < o.y + o.h) return true;
+    return false;
+}
+
+function getDropChanceFromEnemy() {
+    if (difficultyName === 'ЛЕГКО') return 0.3;
+    if (difficultyName === 'СРЕДНЕ') return 0.6;
+    return 1.0;
+}
+
+function getDropChanceFromCrate() {
+    if (difficultyName === 'ЛЕГКО') return 0;
+    if (difficultyName === 'СРЕДНЕ') return 0.3;
+    return 0.5;
+}
+
+function spawnCoin(x, y, force = false) { 
+    if (godMode && !force) return;
+    const chance = getDropChanceFromEnemy();
+    if (!force && Math.random() > chance) return;
+    
+    droppedCoins.push({ x: x, y: y, life: 0, isWeapon: false });
+}
+
+function spawnCoinFromCrate(x, y) {
+    if (godMode) return;
+    const chance = getDropChanceFromCrate();
+    if (Math.random() > chance) return;
+    
+    droppedCoins.push({ x: x, y: y, life: 0, isWeapon: false });
+}
+
+function createEnemies(obs) {
+    let en = []; 
+    let count = 2 + Math.floor(currentFloor * 0.8);
+    let kamikazeCounter = 0;
+    let darkMageCounter = 0;
+    
+    let availableTypes = ['shooter'];
+    if (currentFloor >= 2) availableTypes.push('громила', 'healer');
+    if (currentFloor >= 3) availableTypes.push('kamikaze', 'sniper');
+    if (currentFloor >= 4) availableTypes.push('heavy_shooter', 'pyro');
+    if (currentFloor >= 5) availableTypes.push('dark_mage');
+    
+    for(let i=0; i<count; i++) {
+        let ex, ey, attempts = 0;
+        do { 
+            ex = 100 + Math.random()*(width-200); 
+            ey = 100 + Math.random()*(height-200); 
+            attempts++; 
+        } while (checkObstacleCollision(ex, ey, 25, obs) && attempts < 20);
+        
+        let type = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+        
+        if (type === 'dark_mage') {
+            if (darkMageCounter >= 1) {
+                const otherTypes = availableTypes.filter(t => t !== 'dark_mage');
+                type = otherTypes[Math.floor(Math.random() * otherTypes.length)];
+            } else {
+                darkMageCounter++; 
+            }
+        }
+        
+        if (type === 'kamikaze') { 
+            if (kamikazeCounter >= 1) {
+                const otherTypes = availableTypes.filter(t => t !== 'kamikaze');
+                type = otherTypes[Math.floor(Math.random() * otherTypes.length)];
+            } else {
+                kamikazeCounter++; 
+            }
+        }
+        
+        let baseHp = 100;
+        if (type === 'kamikaze') baseHp = 65;
+        else if (type === 'громила') baseHp = 180;
+        else if (type === 'heavy_shooter') baseHp = 100;
+        else if (type === 'pyro') baseHp = 150;
+        else if (type === 'healer') baseHp = 80;
+        else if (type === 'sniper') baseHp = 50;
+        else if (type === 'shooter') baseHp = 80;
+        else if (type === 'dark_mage') baseHp = 100;
+        
+        if (difficultyName === 'СЛОЖНО') baseHp = Math.floor(baseHp * 1.5);
+        baseHp += (currentFloor - 1) * 8;
+        
+        let e = { 
+            x: ex, 
+            y: ey, 
+            type: type, 
+            r: 15, 
+            lastShot: Date.now() + Math.random()*1000, 
+            lastMelee: 0, 
+            maxHp: baseHp,
+            hp: baseHp,
+            id: nextEnemyId++,
+            damageMultiplier: 1,
+            buffed: false
+        };
+        
+        switch(e.type) {
+            case 'kamikaze': 
+                e.speed = 4.0; 
+                e.c = ["#400","#f00","#ff0","#200"]; 
+                e.state = 'run'; 
+                break;
+            case 'громила': 
+                e.speed = 2.2; 
+                e.c = ["#330","#660","#ff0","#220"]; 
+                break;
+            case 'heavy_shooter': 
+                e.speed = 1.5; 
+                e.c = ["#444","#222","#0af","#000"]; 
+                break;
+            case 'pyro': 
+                e.speed = 2.2; 
+                e.c = ["#630","#f60","#ff0","#310"]; 
+                break;
+            case 'healer': 
+                e.speed = 2.5; 
+                e.c = ["#040","#0f0","#fff","#020"]; 
+                break;
+            case 'sniper': 
+                e.speed = 1.2; 
+                e.c = ["#335","#55f","#fff","#001"]; 
+                e.aiming = 0; 
+                e.aimLock = null; 
+                break;
+            case 'shooter': 
+                e.speed = 2.2; 
+                e.c = ["#300","#811","#f00","#000"]; 
+                break;
+            case 'dark_mage':
+                e.speed = 2.0;
+                e.c = ["#440066","#9900ff","#ffccff","#220033"];
+                e.lastBuff = Date.now() + Math.random() * 1000;
+                e.buffCooldown = 3000;
+                e.buffedEnemies = [];
+                break;
+        }
+        
+        en.push(e);
+    }
+    return en;
+}
+
+function generateDungeon() {
+    dungeon = {}; 
+    const roomCount = 8 + Math.floor(currentFloor * 1.5);
+    let coords = [{x:0, y:0}];
+    
+    dungeon["0,0"] = { 
+        enemies: [], 
+        items: [], 
+        doors: [], 
+        obs: createObstacles(), 
+        visited: true, 
+        start: true, 
+        droppedCoins: [],
+        traps: []
+    };
+    
+    const dirs = [{x:0,y:-1,n:'top',r:'bottom'}, {x:0,y:1,n:'bottom',r:'top'}, {x:-1,y:0,n:'left',r:'right'}, {x:1,y:0,n:'right',r:'left'}];
+    
+    let farthestRoom = {x:0, y:0, dist:0};
+    
+    while(Object.keys(dungeon).length < roomCount) {
+        let p = coords[Math.floor(Math.random()*coords.length)];
+        let d = dirs[Math.floor(Math.random()*4)], nx = p.x + d.x, ny = p.y + d.y;
+        if(!dungeon[`${nx},${ny}`]) {
+            let obs = createObstacles();
+            
+            let roomItems = [];
+            if (Math.random() > 0.4) {
+                if (Math.random() < 0.8) {
+                    roomItems.push({x: width/2, y: height/2, type: 'heal', open: false});
+                } else {
+                    const weapons = ['shotgun', 'rifle', 'katana', 'rifle_sniper', 'flamethrower'];
+                    const weaponType = weapons[Math.floor(Math.random() * weapons.length)];
+                    roomItems.push({x: width/2, y: height/2, type: 'weapon', weapon: weaponType, open: false});
+                }
+            }
+            
+            dungeon[`${nx},${ny}`] = { 
+                enemies: createEnemies(obs), 
+                items: roomItems, 
+                doors: [d.r], 
+                obs: obs, 
+                visited: false, 
+                start: false,
+                droppedCoins: [],
+                traps: []
+            };
+            dungeon[`${p.x},${p.y}`].doors.push(d.n); 
+            coords.push({x:nx, y:ny});
+            
+            const dist = Math.abs(nx) + Math.abs(ny);
+            if (dist > farthestRoom.dist) {
+                farthestRoom = {x: nx, y: ny, dist: dist};
+            }
+        }
+    }
+    
+    if (currentFloor % 3 === 0) {
+        const bossType = bosses[Math.floor(Math.random() * bosses.length)];
+        const bossX = farthestRoom.x;
+        const bossY = farthestRoom.y;
+        
+        let entranceDir = null;
+        let entranceRoom = null;
+        for(let d of dirs) {
+            const nx = bossX + d.x;
+            const ny = bossY + d.y;
+            if(dungeon[`${nx},${ny}`]) {
+                entranceDir = d.n;
+                entranceRoom = `${nx},${ny}`;
+                break;
+            }
+        }
+        
+        dungeon[`${bossX},${bossY}`] = {
+            enemies: [],
+            items: [{x: width/2, y: height/2, type: 'heal', open: false}],
+            doors: entranceDir ? [entranceDir] : [],
+            obs: createObstacles(),
+            visited: false,
+            start: false,
+            boss: true,
+            bossType: bossType.type,
+            entranceDir: entranceDir,
+            droppedCoins: [],
+            cleared: false,
+            traps: []
+        };
+        
+        if (entranceRoom) {
+            const neighborRoom = dungeon[entranceRoom];
+            const reverseDir = dirs.find(d => d.n === entranceDir)?.r;
+            if (reverseDir && !neighborRoom.doors.includes(reverseDir)) {
+                neighborRoom.doors.push(reverseDir);
+            }
+        }
+        
+        for (let d of dirs) {
+            if (d.n === entranceDir) continue;
+            
+            let nx = bossX + d.x;
+            let ny = bossY + d.y;
+            let neighborKey = `${nx},${ny}`;
+            
+            if (dungeon[neighborKey]) {
+                let neighborDoors = dungeon[neighborKey].doors;
+                let reverseDir = d.r;
+                let index = neighborDoors.indexOf(reverseDir);
+                if (index > -1) {
+                    neighborDoors.splice(index, 1);
+                }
+            }
+        }
+    }
+}
+
+function initGame(resetAll) {
+    if(resetAll) { 
+        currentFloor = 1; 
+        const d = characters[selectedIdx]; 
+        player = { ...d, x: width/2, y: height/2, curHp: d.hp, lastShot: 0, frame: 0, lookDir: 1, r: 15 };
+        initPlayerWeapons(d);
+        startTime = Date.now();
+        timePlayed = 0;
+        currentTraps = [];
+        saveState.currentRun = null;
+        saveGame();
+    } else {
+        updateRecord();
+        player.curHp = Math.min(player.hp, player.curHp + 45);
+        currentTraps = [];
+    }
+    
+    gameState = 'play'; 
+    showScreen('none');
+    document.getElementById('hud').classList.remove('hidden'); 
+    document.getElementById('mmap-cont').classList.remove('hidden'); 
+    if (isMobile) {
+        document.getElementById('controls').classList.remove('hidden');
+    }
+    document.getElementById('ingame-pause-btn').classList.remove('hidden');
+    document.getElementById('floor-val').innerText = `ЭТАЖ: ${currentFloor}`;
+    document.getElementById('difficulty-hud').innerText = `СЛОЖНОСТЬ: ${difficultyName}`;
+    document.getElementById('difficulty-hud').style.color = difficultyName === 'СЛОЖНО' ? '#f00' : (difficultyName === 'СРЕДНЕ' ? '#ff0' : '#0f0');
+    anyRoomCleared = false;
+    floorClearedMessageShown = false;
+    hideFloorCleared();
+    hidePickupButton();
+    
+    generateDungeon(); 
+    curX = 0; 
+    curY = 0; 
+    loadRoom(0, 0, null);
+}
+
+function updateRecord() {
+    if (isCheated) return;
+    
+    const diffWeights = {'ЛЕГКО': 1, 'СРЕДНЕ': 2, 'СЛОЖНО': 3};
+    const currentWeight = diffWeights[difficultyName];
+    const bestWeight = diffWeights[saveState.bestDiff];
+    
+    if (currentFloor > saveState.bestFloor || (currentFloor === saveState.bestFloor && currentWeight > bestWeight)) {
+        saveState.bestFloor = currentFloor;
+        saveState.bestDiff = difficultyName;
+        saveGame();
+        updateLobbyRecord();
+    }
+}
+
+function loadRoom(x, y, entranceDirection = null) {
+    const key = `${x},${y}`;
+    const r = dungeon[key]; 
+    r.visited = true;
+    enemies = r.enemies; 
+    items = r.items; 
+    roomDoors = r.doors; 
+    obstacles = r.obs; 
+    droppedCoins = r.droppedCoins;
+    currentTraps = r.traps || [];
+    bullets = []; 
+    attacks = [];
+    
+    isBossRoom = r.boss || false;
+    boss = null;
+    slowEffect = 0;
+    roomEntryCooldown = 30;
+    bossStunTimer = 0;
+    
+    let startX, startY;
+    
+    if (entranceDirection) {
+        switch(entranceDirection) {
+            case 'left':
+                startX = 45 + player.r + 10;
+                startY = height / 2;
+                break;
+            case 'right':
+                startX = width - 45 - player.r - 10;
+                startY = height / 2;
+                break;
+            case 'top':
+                startX = width / 2;
+                startY = 45 + player.r + 10;
+                break;
+            case 'bottom':
+                startX = width / 2;
+                startY = height - 45 - player.r - 10;
+                break;
+            default:
+                startX = width / 2;
+                startY = height / 2;
+        }
+    } else {
+        startX = width / 2;
+        startY = height / 2;
+    }
+    
+    let attempts = 0;
+    while (checkObstacleCollision(startX, startY, player.r) && attempts < 100) {
+        startX += 10;
+        startY += 10;
+        attempts++;
+    }
+    player.x = startX;
+    player.y = startY;
+    
+    if (isBossRoom) {
+        cameFromDir = r.entranceDir || 'left';
+        
+        if (r.cleared) {
+            anyRoomCleared = true;
+        }
+        
+        if (!r.cleared) {
+            obstacles = obstacles.filter(o => o.destructible);
+            dungeon[key].obs = obstacles;
+        }
+    } else {
+        cameFromDir = null;
+    }
+    
+    if (isBossRoom && !r.cleared) {
+        const bossTypeName = r.bossType || "knight";
+        const bossType = bosses.find(b => b.type === bossTypeName) || bosses[0];
+        
+        boss = {
+            ...bossType,
+            x: width/2,
+            y: height/2,
+            curHp: bossType.getHp(difficultyName),
+            maxHp: bossType.getHp(difficultyName),
+            lastAttack: Date.now(),
+            attackCooldown: 0,
+            state: "idle",
+            r: 30 * bossType.size,
+            frame: 0,
+            dead: false,
+            deathTimer: 0,
+            stunTimer: 0
+        };
+    }
+    
+    drawMinimap();
+}
+
+function performMeleeHit(x, y, radius, angle, side, damage, attacker = null) {
+    const arcAngle = Math.PI / 3;
+    const key = `${curX},${curY}`;
+    let finalDmg = godMode && side === 'p' ? 9999 : damage;
+    
+    if (side === 'e' && attacker && attacker.buffed) {
+        finalDmg *= attacker.damageMultiplier || 2;
+    }
+    
+    let hitSomething = false;
+    
+    if (side === 'p') {
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            let en = enemies[i];
+            let dx = en.x - x;
+            let dy = en.y - y;
+            let distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < radius + en.r) {
+                if (distance < 5) {
+                    en.hp -= finalDmg;
+                    hitSomething = true;
+                    
+                    let knockback = 8;
+                    let enemyAngle = Math.atan2(dy, dx);
+                    en.x += Math.cos(enemyAngle) * knockback;
+                    en.y += Math.sin(enemyAngle) * knockback;
+                    
+                    if (en.hp <= 0) {
+                        spawnCoin(en.x, en.y);
+                        enemies.splice(i, 1);
+                        if (dungeon[key]) {
+                            dungeon[key].enemies = enemies;
+                            if (enemies.length === 0 && (curX !== 0 || curY !== 0)) anyRoomCleared = true;
+                        }
+                    }
+                } else {
+                    let enemyAngle = Math.atan2(dy, dx);
+                    let angleDiff = Math.abs(enemyAngle - angle);
+                    if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
+                    
+                    if (angleDiff < arcAngle) {
+                        en.hp -= finalDmg;
+                        hitSomething = true;
+                        
+                        let knockback = 8;
+                        en.x += Math.cos(enemyAngle) * knockback;
+                        en.y += Math.sin(enemyAngle) * knockback;
+                        
+                        if (en.hp <= 0) {
+                            spawnCoin(en.x, en.y);
+                            enemies.splice(i, 1);
+                            if (dungeon[key]) {
+                                dungeon[key].enemies = enemies;
+                                if (enemies.length === 0 && (curX !== 0 || curY !== 0)) anyRoomCleared = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (boss && !boss.dead) {
+            let dx = boss.x - x;
+            let dy = boss.y - y;
+            let distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < radius + boss.r) {
+                if (distance < 10) {
+                    boss.curHp -= finalDmg;
+                    hitSomething = true;
+                    shake = 5;
+                } else {
+                    let bossAngle = Math.atan2(dy, dx);
+                    let angleDiff = Math.abs(bossAngle - angle);
+                    if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
+                    
+                    if (angleDiff < arcAngle) {
+                        boss.curHp -= finalDmg;
+                        hitSomething = true;
+                        shake = 5;
+                    }
+                }
+                
+                if (boss.curHp <= 0) {
+                    boss.dead = true;
+                    boss.deathTimer = 60;
+                    boss.curHp = 0;
+                    dungeon[key].cleared = true;
+                    for(let i = 0; i < 10; i++) {
+                        spawnCoin(boss.x + Math.random() * 100 - 50, boss.y + Math.random() * 100 - 50, true);
+                    }
+                    anyRoomCleared = true;
+                }
+            }
+        }
+        
+        obstacles.forEach((o, i) => {
+            if (!o.destructible) return;
+            
+            let closestX = Math.max(o.x, Math.min(x, o.x + o.w));
+            let closestY = Math.max(o.y, Math.min(y, o.y + o.h));
+            let dx = closestX - x;
+            let dy = closestY - y;
+            let distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < radius) {
+                o.hp -= finalDmg;
+                hitSomething = true;
+                
+                if (o.hp <= 0) {
+                    spawnCoinFromCrate(o.x + o.w/2, o.y + o.h/2);
+                    obstacles.splice(i, 1);
+                }
+            }
+        });
+    } else if (side === 'e') {
+        let dx = player.x - x;
+        let dy = player.y - y;
+        let distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < radius + player.r) {
+            if (distance < 5) {
+                let actualDamage = finalDmg;
+                if (attacker && attacker.buffed) {
+                    actualDamage *= attacker.damageMultiplier || 2;
+                }
+                takeDamage(actualDamage, side === 'e' && boss !== null, attacker ? attacker.type : 'враг');
+                hitSomething = true;
+            } else {
+                let playerAngle = Math.atan2(dy, dx);
+                let angleDiff = Math.abs(playerAngle - angle);
+                if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
+                
+                if (angleDiff < arcAngle) {
+                    let actualDamage = finalDmg;
+                    if (attacker && attacker.buffed) {
+                        actualDamage *= attacker.damageMultiplier || 2;
+                    }
+                    takeDamage(actualDamage, side === 'e' && boss !== null, attacker ? attacker.type : 'враг');
+                    hitSomething = true;
+                }
+            }
+        }
+        
+        obstacles.forEach((o, i) => {
+            if (!o.destructible) return;
+            
+            let closestX = Math.max(o.x, Math.min(x, o.x + o.w));
+            let closestY = Math.max(o.y, Math.min(y, o.y + o.h));
+            let dx = closestX - x;
+            let dy = closestY - y;
+            let distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < radius) {
+                let enemyDamage = finalDmg;
+                if (attacker && attacker.type === 'громила') enemyDamage *= 1.5;
+                if (attacker && attacker.type === 'kamikaze') enemyDamage *= 2;
+                if (attacker && attacker.buffed) {
+                    enemyDamage *= attacker.damageMultiplier || 2;
+                }
+                
+                o.hp -= enemyDamage;
+                hitSomething = true;
+                
+                if (o.hp <= 0) {
+                    spawnCoinFromCrate(o.x + o.w/2, o.y + o.h/2);
+                    obstacles.splice(i, 1);
+                }
+            }
+        });
+    }
+    
+    return hitSomething;
+}
+
+function useAbility() {
+    if ((abCooldown > 0 && !godMode) || abActiveTimer > 0 || gameState !== 'play') return;
+    const p = player, key = `${curX},${curY}`;
+    
+    if (p.n === "Боец") {
+        abActiveTimer = 300;
+        if (!godMode) abCooldown = 300;
+    }
+    else if (p.n === "Маг") { 
+        for(let i=0; i<8; i++) { 
+            let a = (Math.PI*2/8)*i; 
+            bullets.push({ 
+                x: p.x, y: p.y, 
+                vx: Math.cos(a)*10, vy: Math.sin(a)*10, 
+                side: 'p', power: 50 
+            }); 
+        }
+        if (!godMode) abCooldown = 300; 
+    }
+    else if (p.n === "Огр") {
+        shake = 25; 
+        abActiveTimer = 40;
+        
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            let en = enemies[i];
+            if (Math.hypot(en.x - p.x, en.y - p.y) < 280) {
+                en.hp -= (godMode ? 9999 : 90); 
+                let ang = Math.atan2(en.y - p.y, en.x - p.x);
+                
+                let newX = en.x + Math.cos(ang) * 80;
+                let newY = en.y + Math.sin(ang) * 80;
+                
+                const minX = 45 + en.r;
+                const maxX = width - 45 - en.r;
+                const minY = 45 + en.r;
+                const maxY = height - 45 - en.r;
+                
+                newX = Math.max(minX, Math.min(maxX, newX));
+                newY = Math.max(minY, Math.min(maxY, newY));
+                
+                let canMove = true;
+                for (let o of obstacles) {
+                    if (newX + en.r > o.x && newX - en.r < o.x + o.w && 
+                        newY + en.r > o.y && newY - en.r < o.y + o.h) {
+                        canMove = false;
+                        break;
+                    }
+                }
+                
+                if (canMove) {
+                    en.x = newX;
+                    en.y = newY;
+                }
+                
+                if (en.hp <= 0) { 
+                    spawnCoin(en.x, en.y); 
+                    enemies.splice(i, 1);
+                    if (enemies.length === 0 && (curX !== 0 || curY !== 0)) anyRoomCleared = true;
+                }
+            }
+        }
+        
+        if (boss && !boss.dead && Math.hypot(boss.x - p.x, boss.y - p.y) < 280) {
+            boss.curHp -= (godMode ? 9999 : 90);
+            if (boss.curHp <= 0) {
+                boss.dead = true;
+                boss.deathTimer = 60;
+                boss.curHp = 0;
+                dungeon[key].cleared = true;
+                for(let i = 0; i < 10; i++) {
+                    spawnCoin(boss.x + Math.random() * 100 - 50, boss.y + Math.random() * 100 - 50, true);
+                }
+                anyRoomCleared = true;
+            }
+            shake = 15;
+        }
+        
+        if (dungeon[key]) dungeon[key].enemies = enemies;
+        if (!godMode) abCooldown = 600;
+    }
+    else if (p.n === "Танк") {
+        abActiveTimer = 300;
+        if (!godMode) abCooldown = 600;
+    }
+    else if (p.n === "Ниндзя") {
+        let ax = moveDir.x || p.lookDir, ay = moveDir.y, d = Math.hypot(ax, ay) || 1;
+        let tx = p.x + (ax/d)*150, ty = p.y + (ay/d)*150;
+        
+        let canMove = true;
+        for (let o of obstacles) {
+            if (tx + p.r > o.x && tx - p.r < o.x + o.w && ty + p.r > o.y && ty - p.r < o.y + o.h) {
+                canMove = false;
+                break;
+            }
+        }
+        
+        if (canMove) { 
+            p.x = tx; 
+            p.y = ty; 
+        }
+        
+        attacks.push({ x: p.x, y: p.y, angle: 0, life: 15, side: 'p', radius: 120 });
+        performMeleeHit(p.x, p.y, 120, 0, 'p', 60);
+        if (dungeon[key]) dungeon[key].enemies = enemies;
+        if (!godMode) abCooldown = 120;
+    }
+    else if (p.n === "Охотник") {
+        if (!dungeon[key].traps) dungeon[key].traps = [];
+        if (dungeon[key].traps.length >= 5) return;
+        
+        dungeon[key].traps.push({
+            x: p.x,
+            y: p.y,
+            r: 25,
+            damage: 300,
+            stun: 180,
+            used: false,
+            id: Date.now() + Math.random()
+        });
+        currentTraps = dungeon[key].traps;
+        
+        if (!godMode) abCooldown = 300;
+    }
+    
+    drawMinimap();
+}
+
+function isDungeonClear() { 
+    for(let k in dungeon) {
+        const room = dungeon[k];
+        if(room.enemies.length > 0) return false;
+        if(room.boss && !room.cleared) return false;
+    } 
+    return true; 
+}
+
+function showFloorCleared() {
+    if (floorClearedMessageShown) return;
+    const msg = document.getElementById('floor-cleared-msg');
+    msg.classList.add('show');
+    floorClearedMessageShown = true;
+}
+
+function hideFloorCleared() {
+    document.getElementById('floor-cleared-msg').classList.remove('show');
+}
+
+function takeDamage(dmg, isBossAttack = false, enemyType = null) { 
+    if (godMode) return;
+    if (player.n === "Танк" && abActiveTimer > 0) return;
+    
+    if (player.n === "Маг" && Math.random() < 0.15) {
+        return;
+    }
+    
+    let finalDmg = dmg;
+    if (!isBossAttack) {
+        finalDmg *= difficultyMultiplier;
+    }
+    
+    player.curHp -= finalDmg; 
+    if (player.curHp < 0) player.curHp = 0;
+    shake = 10; 
+    
+    if (isBossAttack && boss) {
+        lastDamagedBy = boss.name;
+    } else if (enemyType) {
+        const enemyNames = {
+            'shooter': 'стрелок',
+            'громила': 'громила',
+            'healer': 'медик',
+            'kamikaze': 'камикадзе',
+            'sniper': 'снайпер',
+            'heavy_shooter': 'тяжелый стрелок',
+            'pyro': 'пиромант',
+            'dark_mage': 'тёмный маг'
+        };
+        lastDamagedBy = enemyNames[enemyType] || enemyType;
+    } else {
+        lastDamagedBy = 'неизвестно';
+    }
+}
+
+function update() {
+    if (gameState !== 'play') return;
+    if (shake > 0) shake--;
+    
+    if (swapCooldown > 0) swapCooldown--;
+    if (dropCooldown > 0) dropCooldown--;
+    if (dropCooldown === 0) justDroppedWeapon = null;
+    
+    if (roomEntryCooldown > 0) roomEntryCooldown--;
+    
+    const key = `${curX},${curY}`;
+    for (let i = currentTraps.length - 1; i >= 0; i--) {
+        const trap = currentTraps[i];
+        if (trap.used) {
+            currentTraps.splice(i, 1);
+            continue;
+        }
+        
+        for (let j = enemies.length - 1; j >= 0; j--) {
+            const en = enemies[j];
+            if (Math.hypot(en.x - trap.x, en.y - trap.y) < trap.r + en.r) {
+                spawnCoin(en.x, en.y);
+                enemies.splice(j, 1);
+                trap.used = true;
+                break;
+            }
+        }
+        
+        if (boss && !boss.dead && Math.hypot(boss.x - trap.x, boss.y - trap.y) < trap.r + boss.r) {
+            boss.curHp -= trap.damage;
+            bossStunTimer = trap.stun;
+            trap.used = true;
+            shake = 15;
+            
+            if (boss.curHp <= 0) {
+                boss.dead = true;
+                boss.deathTimer = 60;
+                boss.curHp = 0;
+                dungeon[key].cleared = true;
+                for(let i = 0; i < 10; i++) {
+                    spawnCoin(boss.x + Math.random() * 100 - 50, boss.y + Math.random() * 100 - 50, true);
+                }
+                anyRoomCleared = true;
+            }
+        }
+    }
+    dungeon[key].traps = currentTraps;
+    
+    weaponToPickup = null;
+    droppedCoins.forEach(c => {
+        if (c.isWeapon && Math.hypot(player.x - c.x, player.y - c.y) < 60) {
+            weaponToPickup = c.weapon;
+        }
+    });
+    
+    if (weaponToPickup) {
+        showPickupButton(weaponToPickup);
+    } else {
+        hidePickupButton();
+    }
+    
+    if (!isMobile) {
+        moveDir.x = (keys['a'] || keys['ф'] ? -1 : 0) + (keys['d'] || keys['в'] ? 1 : 0);
+        moveDir.y = (keys['w'] || keys['ц'] ? -1 : 0) + (keys['s'] || keys['ы'] ? 1 : 0);
+        
+        const moveLength = Math.sqrt(moveDir.x * moveDir.x + moveDir.y * moveDir.y);
+        if (moveLength > 0) {
+            moveDir.x /= moveLength;
+            moveDir.y /= moveLength;
+        }
+        
+        if (mouse.x !== 0 && mouse.y !== 0) {
+            const dx = mouse.x - player.x;
+            const dy = mouse.y - player.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > 0) {
+                shootDir.x = dx / dist;
+                shootDir.y = dy / dist;
+                player.lookDir = shootDir.x > 0 ? 1 : -1;
+            }
+        }
+        
+        const weapon = getActiveWeapon();
+        const now = Date.now();
+        
+        if (mouse.shoot && weapon && weapon.type && now - player.lastShot > (player.n === "Боец" && abActiveTimer > 0 ? weapon.speed / 2 : weapon.speed)) {
+            const angle = Math.atan2(shootDir.y, shootDir.x);
+            
+            if (weapon.type === 'range') {
+                if (weapon.name === "Огнемёт") {
+                    for(let i = -1; i <= 1; i++) {
+                        bullets.push({ 
+                            x: player.x, y: player.y, 
+                            vx: Math.cos(angle + i * weapon.spread) * weapon.bulletSpeed, 
+                            vy: Math.sin(angle + i * weapon.spread) * weapon.bulletSpeed, 
+                            side: 'p', 
+                            power: weapon.damage,
+                            isFire: true,
+                            life: weapon.life
+                        });
+                    }
+                } else {
+                    bullets.push({ 
+                        x: player.x, y: player.y, 
+                        vx: Math.cos(angle) * weapon.bulletSpeed, 
+                        vy: Math.sin(angle) * weapon.bulletSpeed, 
+                        side: 'p', 
+                        power: weapon.damage 
+                    });
+                }
+            } 
+            else if (weapon.type === 'shotgun') {
+                for(let i = -2; i <= 2; i++) {
+                    bullets.push({ 
+                        x: player.x, y: player.y, 
+                        vx: Math.cos(angle + i * 0.15) * weapon.bulletSpeed, 
+                        vy: Math.sin(angle + i * 0.15) * weapon.bulletSpeed, 
+                        side: 'p', 
+                        life: 35, 
+                        power: weapon.damage 
+                    });
+                }
+            }
+            else if (weapon.type === 'melee') {
+                attacks.push({ 
+                    x: player.x, y: player.y, 
+                    angle: angle, 
+                    life: 10, 
+                    side: 'p', 
+                    radius: weapon.radius 
+                });
+                performMeleeHit(player.x, player.y, weapon.radius, angle, 'p', weapon.damage);
+            }
+            
+            player.lastShot = now;
+        }
+        
+        if (mouse.abilityPressed) {
+            mouse.abilityPressed = false;
+            useAbility();
+        }
+    }
+    
+    if (isDungeonClear() && !floorClearedMessageShown) {
+        showFloorCleared();
+    }
+    
+    const speedMultiplier = slowEffect > 0 ? 0.5 : 1;
+    if (slowEffect > 0) slowEffect--;
+    
+    const activeWeapon = getActiveWeapon();
+    const activeSpeed = (godMode ? 8 : player.speed) * speedMultiplier;
+    
+    if (boss && !boss.dead && boss.curHp > 0 && roomEntryCooldown <= 0) {
+        if (bossStunTimer > 0) {
+            bossStunTimer--;
+            if (bossStunTimer <= 0) {
+                boss.state = "idle";
+            }
+            boss.frame += 0.1;
+        } else {
+            boss.frame += 0.1;
+            const now = Date.now();
+            
+            if (boss.attackCooldown > 0) {
+                boss.attackCooldown--;
+            } else if (now - boss.lastAttack > 1500) {
+                const attack = boss.attacks[Math.floor(Math.random() * boss.attacks.length)];
+                const damage = attack.damage[difficultyName === 'ЛЕГКО' ? 'easy' : difficultyName === 'СРЕДНЕ' ? 'medium' : 'hard'];
+                
+                boss.lastAttack = now;
+                boss.attackCooldown = attack.cooldown / 100;
+                
+                if (attack.name === "Рывок") {
+                    const angle = Math.atan2(player.y - boss.y, player.x - boss.x);
+                    boss.state = "charging";
+                    boss.chargeAngle = angle;
+                    boss.chargeDamage = damage;
+                    boss.chargeTimer = attack.chargeTime || 60;
+                    boss.targetX = player.x;
+                    boss.targetY = player.y;
+                    boss.chargeStartX = boss.x;
+                    boss.chargeStartY = boss.y;
+                } else if (attack.name === "Прыжок") {
+                    boss.state = "charging";
+                    boss.chargeDamage = damage;
+                    boss.chargeTimer = attack.chargeTime || 50;
+                    boss.jumpTargetX = player.x;
+                    boss.jumpTargetY = player.y;
+                    boss.jumpStartX = boss.x;
+                    boss.jumpStartY = boss.y;
+                } else if (attack.name === "Бросок слизи" || attack.name === "Бросок топора") {
+                    const angle = Math.atan2(player.y - boss.y, player.x - boss.x);
+                    bullets.push({
+                        x: boss.x,
+                        y: boss.y,
+                        vx: Math.cos(angle) * 8,
+                        vy: Math.sin(angle) * 8,
+                        side: 'e',
+                        power: damage,
+                        isBoss: true,
+                        effect: attack.effect,
+                        type: attack.name === "Бросок топора" ? "axe" : "slime"
+                    });
+                }
+            }
+            
+            if (boss.state === "charging" && boss.chargeTimer > 0) {
+                boss.chargeTimer--;
+                boss.flashTimer = (boss.flashTimer || 0) + 1;
+                
+                if (boss.chargeTimer <= 0) {
+                    if (boss.attacks.find(a => a.name === "Рывок") && boss.chargeAngle !== undefined) {
+                        boss.vx = Math.cos(boss.chargeAngle) * 10;
+                        boss.vy = Math.sin(boss.chargeAngle) * 10;
+                        boss.state = "charge";
+                        boss.chargeTime = 25;
+                        boss.chargeDistance = 0;
+                    } else if (boss.attacks.find(a => a.name === "Прыжок")) {
+                        boss.state = "jump";
+                        boss.jumpTime = 60;
+                    }
+                }
+            } 
+            else if (boss.state === "charge" && boss.chargeTime > 0) {
+                const nextX = boss.x + boss.vx;
+                const nextY = boss.y + boss.vy;
+                
+                let collision = false;
+                
+                const minBoundary = 45 + boss.r;
+                const maxBoundaryX = width - 45 - boss.r;
+                const maxBoundaryY = height - 45 - boss.r;
+                
+                if (nextX < minBoundary || nextX > maxBoundaryX || 
+                    nextY < minBoundary || nextY > maxBoundaryY) {
+                    collision = true;
+                }
+                
+                obstacles.forEach((o, i) => {
+                    if (checkObstacleCollision(nextX, boss.y, boss.r) || 
+                        checkObstacleCollision(boss.x, nextY, boss.r)) {
+                        o.hp = 0;
+                        obstacles.splice(i, 1);
+                        collision = true;
+                    }
+                });
+                
+                if (!collision) {
+                    boss.x = nextX;
+                    boss.y = nextY;
+                } else {
+                    boss.chargeTime = 0;
+                    boss.state = "idle";
+                }
+                
+                boss.chargeTime--;
+                boss.chargeDistance += Math.hypot(boss.vx, boss.vy);
+                
+                if (Math.hypot(player.x - boss.x, player.y - boss.y) < player.r + boss.r) {
+                    takeDamage(boss.chargeDamage, true);
+                    boss.state = "idle";
+                    boss.chargeTime = 0;
+                }
+                
+                if (boss.chargeDistance > 200) {
+                    boss.state = "idle";
+                    boss.chargeTime = 0;
+                }
+                
+                if (boss.chargeTime <= 0) boss.state = "idle";
+            } 
+            else if (boss.state === "jump" && boss.jumpTime > 0) {
+                const progress = 1 - (boss.jumpTime / 60);
+                const parabolaHeight = Math.sin(progress * Math.PI) * 100;
+                
+                boss.x = boss.jumpStartX + (boss.jumpTargetX - boss.jumpStartX) * progress;
+                boss.y = boss.jumpStartY + (boss.jumpTargetY - boss.jumpStartY) * progress - parabolaHeight;
+                
+                boss.jumpTime--;
+                
+                if (boss.jumpTime <= 0) {
+                    boss.state = "idle";
+                    if (Math.hypot(player.x - boss.x, player.y - boss.y) < 100) {
+                        takeDamage(boss.chargeDamage, true);
+                        shake = 15;
+                    }
+                    
+                    obstacles.forEach((o, i) => {
+                        if (Math.hypot(boss.x - (o.x + o.w/2), boss.y - (o.y + o.h/2)) < 100) {
+                            o.hp = 0;
+                            obstacles.splice(i, 1);
+                        }
+                    });
+                }
+            } else {
+                const angle = Math.atan2(player.y - boss.y, player.x - boss.x);
+                const nx = boss.x + Math.cos(angle) * boss.speed;
+                const ny = boss.y + Math.sin(angle) * boss.speed;
+                
+                const minBoundary = 45 + boss.r;
+                const maxBoundaryX = width - 45 - boss.r;
+                const maxBoundaryY = height - 45 - boss.r;
+                
+                if (nx >= minBoundary && nx <= maxBoundaryX && !checkObstacleCollision(nx, boss.y, boss.r)) boss.x = nx;
+                if (ny >= minBoundary && ny <= maxBoundaryY && !checkObstacleCollision(boss.x, ny, boss.r)) boss.y = ny;
+                
+                if (Math.hypot(player.x - boss.x, player.y - boss.y) < 50 && now - boss.lastAttack > 800) {
+                    const meleeAttack = boss.attacks.find(a => a.name === "Удар");
+                    if (meleeAttack) {
+                        const damage = meleeAttack.damage[difficultyName === 'ЛЕГКО' ? 'easy' : difficultyName === 'СРЕДНЕ' ? 'medium' : 'hard'];
+                        takeDamage(damage, true);
+                        boss.lastAttack = now;
+                        boss.attackCooldown = 80;
+                    }
+                }
+            }
+        }
+    } else if (boss && boss.dead) {
+        boss.deathTimer--;
+        if (boss.deathTimer <= 0) {
+            boss = null;
+        }
+    }
+    
+    if (abActiveTimer > 0) {
+        abActiveTimer--;
+        if (abActiveTimer === 0 && (player.n === "Боец" || player.n === "Танк") && !godMode) {
+            abCooldown = 600;
+        }
+    } else if (abCooldown > 0 && !godMode) {
+        abCooldown--;
+    }
+    
+    const btn = document.getElementById('btn-ability');
+    if(btn) { 
+        if(abActiveTimer > 0) {
+            btn.innerText = Math.ceil(abActiveTimer/60);
+        } else if(abCooldown > 0) {
+            btn.innerText = Math.ceil(abCooldown/60);
+        } else {
+            btn.innerText = "SKILL\nREADY";
+        }
+        btn.style.borderColor = (abCooldown > 0 || abActiveTimer > 0) ? "#444" : "#0f0"; 
+    }
+    
+    let nx = player.x + moveDir.x * activeSpeed, ny = player.y + moveDir.y * activeSpeed;
+    if (!checkObstacleCollision(nx, player.y, player.r)) player.x = nx;
+    if (!checkObstacleCollision(player.x, ny, player.r)) player.y = ny;
+    if (Math.abs(moveDir.x) > 0.1 || Math.abs(moveDir.y) > 0.1) player.frame += 0.2;
+    
+    if (isMobile && Math.hypot(shootDir.x, shootDir.y) > 0.4) {
+        player.lookDir = shootDir.x > 0 ? 1 : -1;
+        const weapon = getActiveWeapon();
+        const now = Date.now();
+        
+        if (weapon && weapon.type && now - player.lastShot > (player.n === "Боец" && abActiveTimer > 0 ? weapon.speed / 2 : weapon.speed)) {
+            const normX = shootDir.x / Math.max(0.4, Math.hypot(shootDir.x, shootDir.y));
+            const normY = shootDir.y / Math.max(0.4, Math.hypot(shootDir.x, shootDir.y));
+            const angle = Math.atan2(normY, normX);
+            
+            if (weapon.type === 'range') {
+                if (weapon.name === "Огнемёт") {
+                    for(let i = -1; i <= 1; i++) {
+                        bullets.push({ 
+                            x: player.x, y: player.y, 
+                            vx: Math.cos(angle + i * weapon.spread) * weapon.bulletSpeed, 
+                            vy: Math.sin(angle + i * weapon.spread) * weapon.bulletSpeed, 
+                            side: 'p', 
+                            power: weapon.damage,
+                            isFire: true,
+                            life: weapon.life
+                        });
+                    }
+                } else {
+                    bullets.push({ 
+                        x: player.x, y: player.y, 
+                        vx: Math.cos(angle) * weapon.bulletSpeed, 
+                        vy: Math.sin(angle) * weapon.bulletSpeed, 
+                        side: 'p', 
+                        power: weapon.damage 
+                    });
+                }
+            } 
+            else if (weapon.type === 'shotgun') {
+                for(let i = -2; i <= 2; i++) {
+                    bullets.push({ 
+                        x: player.x, y: player.y, 
+                        vx: Math.cos(angle + i * 0.15) * weapon.bulletSpeed, 
+                        vy: Math.sin(angle + i * 0.15) * weapon.bulletSpeed, 
+                        side: 'p', 
+                        life: 35, 
+                        power: weapon.damage 
+                    });
+                }
+            }
+            else if (weapon.type === 'melee') {
+                attacks.push({ 
+                    x: player.x, y: player.y, 
+                    angle: angle, 
+                    life: 10, 
+                    side: 'p', 
+                    radius: weapon.radius 
+                });
+                performMeleeHit(player.x, player.y, weapon.radius, angle, 'p', weapon.damage);
+            }
+            
+            player.lastShot = now;
+        }
+    }
+    
+    const canExit = (enemies.length === 0 || (godMode && anyRoomCleared)), dz = 80, wp = 45;
+    const currentRoom = dungeon[`${curX},${curY}`];
+    
+    if (isBossRoom) {
+        const bossDead = (boss && boss.dead) || currentRoom.cleared;
+        
+        if (!bossDead) {
+            if (player.x < wp) player.x = wp;
+            if (player.x > width-wp) player.x = width-wp;
+            if (player.y < wp) player.y = wp;
+            if (player.y > height-wp) player.y = height-wp;
+            
+            if (cameFromDir === 'left' && player.x < wp && Math.abs(player.y - height/2) < dz) {
+                player.x = wp;
+            }
+            if (cameFromDir === 'right' && player.x > width-wp && Math.abs(player.y - height/2) < dz) {
+                player.x = width-wp;
+            }
+            if (cameFromDir === 'top' && player.y < wp && Math.abs(player.x - width/2) < dz) {
+                player.y = wp;
+            }
+            if (cameFromDir === 'bottom' && player.y > height-wp && Math.abs(player.x - width/2) < dz) {
+                player.y = height-wp;
+            }
+        } else {
+            if (cameFromDir === 'left' && player.x < wp && Math.abs(player.y - height/2) < dz) {
+                if (player.x < 0) { 
+                    curX--; 
+                    loadRoom(curX, curY, 'right');
+                }
+            } else if (cameFromDir === 'right' && player.x > width-wp && Math.abs(player.y - height/2) < dz) {
+                if (player.x > width) { 
+                    curX++; 
+                    loadRoom(curX, curY, 'left');
+                }
+            } else if (cameFromDir === 'top' && player.y < wp && Math.abs(player.x - width/2) < dz) {
+                if (player.y < 0) { 
+                    curY--; 
+                    loadRoom(curX, curY, 'bottom');
+                }
+            } else if (cameFromDir === 'bottom' && player.y > height-wp && Math.abs(player.x - width/2) < dz) {
+                if (player.y > height) { 
+                    curY++; 
+                    loadRoom(curX, curY, 'top');
+                }
+            }
+            
+            if (cameFromDir !== 'left' && player.x < wp) player.x = wp;
+            if (cameFromDir !== 'right' && player.x > width-wp) player.x = width-wp;
+            if (cameFromDir !== 'top' && player.y < wp) player.y = wp;
+            if (cameFromDir !== 'bottom' && player.y > height-wp) player.y = height-wp;
+        }
+    } else {
+        if (player.x < wp && canExit && roomDoors.includes('left') && Math.abs(player.y - height/2) < dz) { 
+            if (player.x < 0) { 
+                curX--; 
+                loadRoom(curX, curY, 'right');
+            } 
+        } else if (player.x < wp) player.x = wp;
+        
+        if (player.x > width-wp && canExit && roomDoors.includes('right') && Math.abs(player.y - height/2) < dz) { 
+            if (player.x > width) { 
+                curX++; 
+                loadRoom(curX, curY, 'left');
+            } 
+        } else if (player.x > width-wp) player.x = width-wp;
+        
+        if (player.y < wp && canExit && roomDoors.includes('top') && Math.abs(player.x - width/2) < dz) { 
+            if (player.y < 0) { 
+                curY--; 
+                loadRoom(curX, curY, 'bottom');
+            } 
+        } else if (player.y < wp) player.y = wp;
+        
+        if (player.y > height-wp && canExit && roomDoors.includes('bottom') && Math.abs(player.x - width/2) < dz) { 
+            if (player.y > height) { 
+                curY++; 
+                loadRoom(curX, curY, 'top');
+            } 
+        } else if (player.y > height-wp) player.y = height-wp;
+    }
+    
+    if (curX === 0 && curY === 0 && isDungeonClear() && Math.hypot(player.x - width/2, player.y - height/2) < 50) { 
+        currentFloor++; 
+        updateRecord();
+        initGame(false); 
+        return; 
+    }
+    
+    const n = Date.now();
+    enemies.forEach((en, i) => {
+        if (roomEntryCooldown > 0) return;
+        
+        const d = Math.hypot(player.x - en.x, player.y - en.y), ang = Math.atan2(player.y - en.y, player.x - en.x);
+        let cm = true; 
+        if(en.type === 'kamikaze' && en.state === 'explode') cm = false; 
+        if(en.type === 'sniper' && en.aiming > 100) cm = false;
+        
+        if (cm) {
+            let moveAngle = ang;
+            const rayDist = 45; 
+            const checkX = en.x + Math.cos(moveAngle) * rayDist;
+            const checkY = en.y + Math.sin(moveAngle) * rayDist;
+            
+            const minBoundary = 45 + en.r;
+            const maxBoundaryX = width - 45 - en.r;
+            const maxBoundaryY = height - 45 - en.r;
+            
+            if (checkX < minBoundary || checkX > maxBoundaryX || 
+                checkY < minBoundary || checkY > maxBoundaryY) {
+                let foundSafeAngle = false;
+                for (let offset = 0.2; offset < Math.PI; offset += 0.2) {
+                    const leftA = ang - offset;
+                    const rightA = ang + offset;
+                    
+                    const leftX = en.x + Math.cos(leftA) * rayDist;
+                    const leftY = en.y + Math.sin(leftA) * rayDist;
+                    const rightX = en.x + Math.cos(rightA) * rayDist;
+                    const rightY = en.y + Math.sin(rightA) * rayDist;
+                    
+                    if (leftX >= minBoundary && leftX <= maxBoundaryX && 
+                        leftY >= minBoundary && leftY <= maxBoundaryY &&
+                        !checkObstacleCollision(leftX, leftY, en.r)) {
+                        moveAngle = leftA;
+                        foundSafeAngle = true;
+                        break;
+                    }
+                    
+                    if (rightX >= minBoundary && rightX <= maxBoundaryX && 
+                        rightY >= minBoundary && rightY <= maxBoundaryY &&
+                        !checkObstacleCollision(rightX, rightY, en.r)) {
+                        moveAngle = rightA;
+                        foundSafeAngle = true;
+                        break;
+                    }
+                }
+                
+                if (!foundSafeAngle) {
+                    moveAngle = ang + Math.PI;
+                }
+            } else if (checkObstacleCollision(checkX, checkY, en.r)) {
+                let foundPath = false;
+                for (let offset = 0.5; offset < 2.5; offset += 0.5) {
+                    let leftA = ang - offset, rightA = ang + offset;
+                    const leftX = en.x + Math.cos(leftA)*rayDist;
+                    const leftY = en.y + Math.sin(leftA)*rayDist;
+                    const rightX = en.x + Math.cos(rightA)*rayDist;
+                    const rightY = en.y + Math.sin(rightA)*rayDist;
+                    
+                    if (leftX >= minBoundary && leftX <= maxBoundaryX && 
+                        leftY >= minBoundary && leftY <= maxBoundaryY &&
+                        !checkObstacleCollision(leftX, leftY, en.r)) {
+                        moveAngle = leftA; foundPath = true; break;
+                    } else if (rightX >= minBoundary && rightX <= maxBoundaryX && 
+                               rightY >= minBoundary && rightY <= maxBoundaryY &&
+                               !checkObstacleCollision(rightX, rightY, en.r)) {
+                        moveAngle = rightA; foundPath = true; break;
+                    }
+                }
+                
+                const obstacleInFront = obstacles.find(o => 
+                    checkX > o.x && checkX < o.x + o.w && 
+                    checkY > o.y && checkY < o.y + o.h && 
+                    o.destructible
+                );
+                
+                if (obstacleInFront) {
+                    const distThroughObstacle = Math.hypot(en.x - player.x, en.y - player.y);
+                    const currentDist = Math.hypot(en.x - player.x, en.y - player.y);
+                    
+                    if (distThroughObstacle < currentDist * 0.8) {
+                        attacks.push({ 
+                            x: en.x, y: en.y, 
+                            angle: moveAngle, life: 10, 
+                            side: 'e', radius: 75 
+                        });
+                        performMeleeHit(en.x, en.y, 75, moveAngle, 'e', 25, en);
+                    } else {
+                        moveAngle = ang + Math.PI * 0.5;
+                    }
+                }
+            }
+            
+            if(en.type === 'healer') {
+                const al = enemies.filter(e => e !== en && e.type !== 'healer');
+                if(al.length > 0) {
+                    let cA = al[0], mD = Math.hypot(en.x - cA.x, en.y - cA.y);
+                    al.forEach(a => { let dist = Math.hypot(en.x - a.x, en.y - a.y); if(dist < mD) { mD = dist; cA = a; } });
+                    moveAngle = Math.atan2(cA.y - en.y, cA.x - en.x); 
+                    if(mD < 80) moveAngle += Math.PI;
+                }
+            }
+            
+            if(en.type === 'dark_mage') {
+                let targetEnemy = null;
+                let minDist = Infinity;
+                
+                enemies.forEach(en2 => {
+                    if (en2 !== en && en2.type !== 'dark_mage' && !en.buffedEnemies.includes(en2.id)) {
+                        const dist = Math.hypot(en2.x - en.x, en2.y - en.y);
+                        if (dist < minDist && dist < 300) {
+                            minDist = dist;
+                            targetEnemy = en2;
+                        }
+                    }
+                });
+                
+                if (targetEnemy) {
+                    moveAngle = Math.atan2(targetEnemy.y - en.y, targetEnemy.x - en.x);
+                    
+                    if (minDist < 100 && n - en.lastBuff > en.buffCooldown) {
+                        targetEnemy.buffed = true;
+                        targetEnemy.maxHp *= 2;
+                        targetEnemy.hp = targetEnemy.maxHp;
+                        targetEnemy.damageMultiplier = 2;
+                        en.buffedEnemies.push(targetEnemy.id);
+                        en.lastBuff = n;
+                    }
+                } else {
+                    moveAngle = ang;
+                }
+            }
+            
+            let ex = en.x + Math.cos(moveAngle) * en.speed, ey = en.y + Math.sin(moveAngle) * en.speed;
+            ex = Math.max(minBoundary, Math.min(maxBoundaryX, ex));
+            ey = Math.max(minBoundary, Math.min(maxBoundaryY, ey));
+            
+            if (!checkObstacleCollision(ex, en.y, en.r)) en.x = ex;
+            if (!checkObstacleCollision(en.x, ey, en.r)) en.y = ey;
+        }
+        
+        if (roomEntryCooldown > 0) return;
+        
+        switch(en.type) {
+            case 'shooter': 
+                if (n - en.lastShot > 1800) { 
+                    let damage = 10;
+                    if (en.buffed) damage *= en.damageMultiplier || 2;
+                    bullets.push({ 
+                        x: en.x, y: en.y, 
+                        vx: Math.cos(ang)*7, vy: Math.sin(ang)*7, 
+                        side: 'e', power: damage, shooterType: en.type
+                    }); 
+                    en.lastShot = n; 
+                } 
+                break;
+            case 'громила': 
+                if (d < 70 && n - en.lastMelee > 1000) { 
+                    let damage = 25;
+                    if (en.buffed) damage *= en.damageMultiplier || 2;
+                    attacks.push({ 
+                        x: en.x, y: en.y, 
+                        angle: ang, life: 10, 
+                        side: 'e', radius: 75 
+                    }); 
+                    performMeleeHit(en.x, en.y, 75, ang, 'e', damage, en); 
+                    en.lastMelee = n; 
+                } 
+                break;
+            case 'heavy_shooter': 
+                if (n - en.lastShot > 400) {
+                    let damage = 5;
+                    if (en.buffed) damage *= en.damageMultiplier || 2;
+                    bullets.push({ 
+                        x: en.x, y: en.y, 
+                        vx: Math.cos(ang)*8, vy: Math.sin(ang)*8, 
+                        side: 'e', power: damage, shooterType: en.type
+                    }); 
+                    en.lastShot = n; 
+                } 
+                break;
+            case 'pyro': 
+                if (d < 300 && n - en.lastShot > 60) { 
+                    let s = (Math.random()-0.5)*0.6; 
+                    let damage = 2;
+                    if (en.buffed) damage *= en.damageMultiplier || 2;
+                    bullets.push({ 
+                        x: en.x, y: en.y, 
+                        vx: Math.cos(ang+s)*6, vy: Math.sin(ang+s)*6, 
+                        side: 'e', isFire: true, power: damage, life: 30, shooterType: en.type
+                    }); 
+                    en.lastShot = n; 
+                } 
+                break;
+            case 'kamikaze': 
+                if (en.state === 'run' && d < 60) { 
+                    en.state = 'explode'; 
+                    en.et = 42; 
+                } 
+                if (en.state === 'explode') {
+                    en.et--;
+                    if(en.et <= 0) { 
+                        let damage = 70;
+                        if (en.buffed) damage *= en.damageMultiplier || 2;
+                        if(d < 120) takeDamage(damage, false, en.type); 
+                        shake = 15; 
+                        enemies.splice(i, 1); 
+                        if (dungeon[key]) { 
+                            dungeon[key].enemies = enemies; 
+                            if (enemies.length === 0 && (curX !== 0 || curY !== 0)) anyRoomCleared = true; 
+                        } 
+                    } 
+                }
+                break;
+            case 'healer': 
+                const rA = enemies.filter(e => e.type !== 'healer'); 
+                if (rA.length > 0) { 
+                    if (n - en.lastShot > 3000) { 
+                        rA.forEach(o => { 
+                            if(Math.hypot(o.x-en.x, o.y-en.y) < 200) {
+                                o.hp = Math.min(o.maxHp, o.hp + 50);
+                            }
+                        }); 
+                        en.lastShot = n; 
+                    } 
+                } else if (d < 60 && n - en.lastMelee > 1000) { 
+                    let damage = 15;
+                    if (en.buffed) damage *= en.damageMultiplier || 2;
+                    attacks.push({ 
+                        x: en.x, y: en.y, 
+                        angle: ang, life: 10, 
+                        side: 'e', radius: 60 
+                    }); 
+                    performMeleeHit(en.x, en.y, 60, ang, 'e', damage, en); 
+                    en.lastMelee = n; 
+                } 
+                break;
+            case 'sniper': 
+                en.aiming++; 
+                if(en.aiming === 100) en.aimLock = ang; 
+                if(en.aiming > 130) { 
+                    let damage = 55;
+                    if (en.buffed) damage *= en.damageMultiplier || 2;
+                    bullets.push({ 
+                        x: en.x, y: en.y, 
+                        vx: Math.cos(en.aimLock)*22, vy: Math.sin(en.aimLock)*22, 
+                        side: 'e', power: damage, shooterType: en.type
+                    }); 
+                    en.aiming = 0; 
+                    en.aimLock = null; 
+                } 
+                break;
+            case 'dark_mage':
+                const allies = enemies.filter(e => e !== en && e.type !== 'dark_mage');
+                if (allies.length === 0 && d < 60 && n - en.lastMelee > 1000) {
+                    let damage = 30;
+                    if (en.buffed) damage *= en.damageMultiplier || 2;
+                    attacks.push({ 
+                        x: en.x, y: en.y, 
+                        angle: ang, life: 10, 
+                        side: 'e', radius: 60 
+                    }); 
+                    performMeleeHit(en.x, en.y, 60, ang, 'e', damage, en); 
+                    en.lastMelee = n; 
+                }
+                break;
+        }
+    });
+    
+    bullets.forEach((b, i) => {
+        b.x += b.vx; 
+        b.y += b.vy; 
+        
+        if(b.life !== undefined && --b.life <= 0) { 
+            bullets.splice(i, 1); 
+            return; 
+        }
+        
+        for(let j = obstacles.length-1; j >= 0; j--) { 
+            let o = obstacles[j]; 
+            if (b.x > o.x && b.x < o.x+o.w && b.y > o.y && b.y < o.y+o.h) { 
+                if (o.destructible && (b.side === 'p' || b.side === 'e')) { 
+                    let damage = b.power || (b.isFire ? 2 : 8);
+                    if (b.side === 'e' && b.isBoss) damage *= 2;
+                    o.hp -= damage; 
+                    if (o.hp <= 0) {
+                        spawnCoinFromCrate(o.x + o.w/2, o.y + o.h/2);
+                        obstacles.splice(j, 1);
+                    }
+                } 
+                bullets.splice(i, 1); 
+                return; 
+            } 
+        }
+        
+        if (b.side === 'p') { 
+            for (let ei = enemies.length-1; ei >= 0; ei--) { 
+                let en = enemies[ei]; 
+                if (Math.hypot(b.x-en.x, b.y-en.y) < 30) { 
+                    en.hp -= (godMode ? 9999 : (b.power || 30)); 
+                    bullets.splice(i, 1); 
+                    if(en.hp<=0) { 
+                        spawnCoin(en.x, en.y);
+                        enemies.splice(ei, 1); 
+                        if (dungeon[key]) {
+                            dungeon[key].enemies = enemies;
+                            if (enemies.length === 0 && (curX !== 0 || curY !== 0)) anyRoomCleared = true;
+                        } 
+                    } 
+                    return; 
+                } 
+            } 
+            
+            if (boss && !boss.dead && Math.hypot(b.x - boss.x, b.y - boss.y) < boss.r) {
+                boss.curHp -= (godMode ? 9999 : (b.power || 30));
+                if (boss.curHp <= 0) {
+                    boss.dead = true;
+                    boss.deathTimer = 60;
+                    boss.curHp = 0;
+                    dungeon[key].cleared = true;
+                    for(let i = 0; i < 10; i++) {
+                        spawnCoin(boss.x + Math.random() * 100 - 50, boss.y + Math.random() * 100 - 50, true);
+                    }
+                    anyRoomCleared = true;
+                }
+                bullets.splice(i, 1);
+                shake = 5;
+                return;
+            }
+        } 
+        else if (b.side === 'e') {
+            if (b.isBoss && Math.hypot(b.x - player.x, b.y - player.y) < 25) {
+                takeDamage(b.power, true);
+                if (b.effect === "slow") slowEffect = 180;
+                bullets.splice(i, 1);
+            } else if (!b.isBoss && Math.hypot(b.x - player.x, b.y - player.y) < 25) {
+                takeDamage(b.isFire ? 2 : (b.power || 8), false, b.shooterType); 
+                bullets.splice(i, 1); 
+            }
+        }
+    });
+    
+    attacks.forEach((a, i) => { if(--a.life<=0) attacks.splice(i, 1); });
+    
+    items.forEach(it => { 
+        if (!it.open && Math.hypot(player.x-it.x, player.y-it.y) < 45) { 
+            it.open = true; 
+            if (it.type === 'heal') {
+                player.curHp = Math.min(player.hp, player.curHp + 45);
+            } else if (it.type === 'weapon') {
+                spawnWeaponFromChest(it.x, it.y, it.weapon);
+            }
+        } 
+    });
+    
+    droppedCoins.forEach((c, i) => { 
+        if(Math.hypot(player.x-c.x, player.y-c.y) < 40) { 
+            if (c.isWeapon) {
+            } else if (!godMode) { 
+                saveState.coins++; 
+                saveGame(); 
+                droppedCoins.splice(i, 1); 
+            } else {
+                droppedCoins.splice(i, 1);
+            }
+        } else c.life++; 
+        
+        if (c.life > 600) {
+            droppedCoins.splice(i, 1);
+        }
+    });
+    
+    if (player.curHp <= 0) { 
+        player.curHp = 0;
+        gameState = 'dead'; 
+        endTime = Date.now();
+        const diffColor = difficultyName === 'СЛОЖНО' ? '#f00' : (difficultyName === 'СРЕДНЕ' ? '#ff0' : '#0f0');
+        document.getElementById('final-score').innerHTML = `Вы дошли до ${currentFloor} этажа<br><span style="color:${diffColor}; font-size:12px;">Сложность: ${difficultyName}</span>`;
+        
+        document.getElementById('killer-info').innerHTML = `Вас убил: <span style="color:#f00">${lastDamagedBy}</span>`;
+        
+        let notice = "";
+        if (isCheated) notice = "Рекорд не засчитан (использован Режим Бога)";
+        else {
+            const diffWeights = {'ЛЕГКО': 1, 'СРЕДНЕ': 2, 'СЛОЖНО': 3};
+            const currentWeight = diffWeights[difficultyName];
+            const bestWeight = diffWeights[saveState.bestDiff];
+            if (currentFloor > saveState.bestFloor || (currentFloor === saveState.bestFloor && currentWeight > bestWeight)) {
+                saveState.bestFloor = currentFloor;
+                saveState.bestDiff = difficultyName;
+                saveGame();
+                notice = "НОВЫЙ РЕКОРД!";
+            } else notice = `Рекорд: ${saveState.bestFloor} этаж (${saveState.bestDiff})`;
+        }
+        document.getElementById('record-notice').innerText = notice;
+        
+        const timeDiff = endTime - startTime;
+        const minutes = Math.floor(timeDiff / 60000);
+        const seconds = Math.floor((timeDiff % 60000) / 1000);
+        document.getElementById('time-survived').innerText = `Время забега: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+        
+        saveState.currentRun = null;
+        saveGame();
+        showScreen('screen-death'); 
+    }
+    
+    document.getElementById('boss-warning').style.display = (boss && !boss.dead) ? 'block' : 'none';
+    const hpPercent = Math.max(0, (player.curHp / player.hp) * 100);
+    document.getElementById('hp-fill').style.width = hpPercent + "%";
+    document.getElementById('hp-text').innerText = `${Math.ceil(Math.max(0, player.curHp))} / ${player.hp}`;
+}
+
+function drawMinimap() {
+    const mm = document.getElementById('mmap'); 
+    if(!mm) return; 
+    
+    mm.innerHTML = ''; 
+    const s = 12;
+    
+    const roomsToShow = new Set();
+    
+    for(let id in dungeon) {
+        const r = dungeon[id];
+        if (r.visited) {
+            roomsToShow.add(id);
+        }
+    }
+    
+    const dirs = [{x:0,y:-1,door:'top'}, {x:0,y:1,door:'bottom'}, {x:-1,y:0,door:'left'}, {x:1,y:0,door:'right'}];
+    
+    const visitedRooms = Array.from(roomsToShow);
+    
+    for(let roomId of visitedRooms) {
+        const [x, y] = roomId.split(',').map(Number);
+        const room = dungeon[roomId];
+        
+        for(let dir of dirs) {
+            const nx = x + dir.x;
+            const ny = y + dir.y;
+            const neighborKey = `${nx},${ny}`;
+            
+            if (room.doors.includes(dir.door) && dungeon[neighborKey]) {
+                roomsToShow.add(neighborKey);
+            }
+        }
+    }
+    
+    for(let id of roomsToShow) {
+        const [x, y] = id.split(',').map(Number);
+        const room = dungeon[id];
+        
+        for(let dir of dirs) {
+            const nx = x + dir.x;
+            const ny = y + dir.y;
+            const neighborKey = `${nx},${ny}`;
+            
+            if (room.doors.includes(dir.door) && roomsToShow.has(neighborKey)) {
+                const line = document.createElement('div');
+                line.style.position = 'absolute';
+                line.style.background = '#888';
+                line.style.opacity = '0.5';
+                
+                const startX = 45 + x*(s+4) + s/2;
+                const startY = 45 + y*(s+4) + s/2;
+                const endX = 45 + nx*(s+4) + s/2;
+                const endY = 45 + ny*(s+4) + s/2;
+                
+                const length = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+                const angle = Math.atan2(endY - startY, endX - startX);
+                
+                line.style.width = length + 'px';
+                line.style.height = '2px';
+                line.style.left = startX + 'px';
+                line.style.top = startY + 'px';
+                line.style.transformOrigin = '0 0';
+                line.style.transform = `rotate(${angle}rad)`;
+                line.style.border = '1px dashed #666';
+                
+                mm.appendChild(line);
+            }
+        }
+    }
+    
+    for(let id of roomsToShow) {
+        const [x, y] = id.split(',').map(Number);
+        const r = dungeon[id];
+        
+        const div = document.createElement('div'); 
+        div.style.position = 'absolute'; 
+        div.style.width = s+'px'; 
+        div.style.height = s+'px';
+        div.style.left = (45 + x*(s+4))+'px'; 
+        div.style.top = (45 + y*(s+4))+'px';
+        
+        let bgColor = '#444';
+        let content = '';
+        
+        if (x === curX && y === curY) {
+            bgColor = '#fff';
+        } else if (r.boss) {
+            bgColor = r.cleared ? '#0a0' : '#f0f';
+            content = '👑';
+        } else if (r.visited) {
+            if (r.enemies.length > 0 && !r.cleared) {
+                bgColor = '#f44';
+            } else {
+                bgColor = '#888';
+            }
+        } else {
+            bgColor = '#555';
+            content = '?';
+        }
+        
+        div.style.background = bgColor;
+        div.style.border = '1px solid ' + (r.visited ? '#666' : '#444');
+        
+        if (r.start) { 
+            content = '🏠'; 
+        }
+        
+        if (content) {
+            div.innerHTML = content;
+            div.style.fontSize = '8px';
+            div.style.display = 'flex';
+            div.style.alignItems = 'center';
+            div.style.justifyContent = 'center';
+        }
+        
+        mm.appendChild(div);
+    }
+}
+
+function drawBoss() {
+    if (!boss) return;
+    
+    const distToPlayer = Math.hypot(boss.x - player.x, boss.y - player.y);
+    if (distToPlayer > 500 && !boss.dead) {
+        ctx.fillStyle = boss.colors[0];
+        ctx.beginPath();
+        ctx.arc(boss.x, boss.y, boss.r, 0, Math.PI * 2);
+        ctx.fill();
+        return;
+    }
+    
+    ctx.save();
+    ctx.translate(boss.x, boss.y);
+    
+    if (!boss.dead) {
+        ctx.fillStyle = '#300';
+        ctx.fillRect(-80, -boss.r - 40, 160, 15);
+        ctx.fillStyle = '#f00';
+        const hpWidth = Math.max(0, (boss.curHp / boss.maxHp) * 160);
+        ctx.fillRect(-80, -boss.r - 40, hpWidth, 15);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-80, -boss.r - 40, 160, 15);
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 10px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${Math.ceil(boss.curHp)}/${boss.maxHp}`, 0, -boss.r - 32);
+        
+        ctx.font = 'bold 16px Courier New';
+        ctx.fillText(boss.name, 0, -boss.r - 50);
+    }
+    
+    if (boss.state === "charging" && !boss.dead) {
+        const flashAlpha = Math.sin(boss.flashTimer * 0.3) * 0.5 + 0.5;
+        
+        if (boss.attacks.find(a => a.name === "Рывок") && boss.chargeAngle !== undefined) {
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(boss.chargeAngle) * 150, Math.sin(boss.chargeAngle) * 150);
+            ctx.lineWidth = 8;
+            ctx.strokeStyle = `rgba(255, 0, 0, ${flashAlpha})`;
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(0, 0, 60, boss.chargeAngle - 0.3, boss.chargeAngle + 0.3);
+            ctx.lineTo(0, 0);
+            ctx.closePath();
+            ctx.fillStyle = `rgba(255, 0, 0, ${flashAlpha * 0.3})`;
+            ctx.fill();
+        } else if (boss.attacks.find(a => a.name === "Прыжок")) {
+            ctx.beginPath();
+            ctx.arc(0, 0, 100, 0, Math.PI * 2);
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = `rgba(255, 255, 0, ${flashAlpha})`;
+            ctx.stroke();
+            
+            ctx.fillStyle = `rgba(255, 255, 0, ${flashAlpha})`;
+            ctx.beginPath();
+            ctx.arc(boss.jumpTargetX - boss.x, boss.jumpTargetY - boss.y, 20, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    
+    if (boss.dead) {
+        const deathAlpha = boss.deathTimer / 60;
+        ctx.globalAlpha = deathAlpha;
+        ctx.scale(1 + (1 - deathAlpha), 1 + (1 - deathAlpha));
+    }
+    
+    if (boss.type === "knight") {
+        ctx.scale(boss.size * 0.9, boss.size * 0.9);
+        
+        ctx.fillStyle = '#111';
+        ctx.fillRect(-20, -35, 40, 70);
+        
+        ctx.fillStyle = '#222';
+        ctx.beginPath();
+        ctx.moveTo(-25, -25);
+        ctx.quadraticCurveTo(0, -40, 25, -25);
+        ctx.lineTo(20, 40);
+        ctx.lineTo(-20, 40);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.fillStyle = '#333';
+        ctx.fillRect(-15, -30, 30, 15);
+        ctx.fillRect(-22, -25, 10, 15);
+        ctx.fillRect(12, -25, 10, 15);
+        ctx.fillRect(-18, 15, 36, 8);
+        
+        ctx.fillStyle = '#222';
+        ctx.fillRect(-18, -50, 36, 25);
+        ctx.fillStyle = '#111';
+        ctx.fillRect(-12, -45, 24, 10);
+        ctx.fillStyle = '#f00';
+        ctx.fillRect(-8, -42, 5, 2);
+        ctx.fillRect(3, -42, 5, 2);
+        
+        ctx.fillStyle = '#666';
+        ctx.fillRect(25, -10, 35, 4);
+        ctx.fillStyle = '#888';
+        ctx.fillRect(55, -8, 6, 8);
+        ctx.fillStyle = '#964';
+        ctx.fillRect(22, -13, 6, 10);
+        
+    } else if (boss.type === "slime") {
+        ctx.scale(boss.size, boss.size);
+        const wobble = Math.sin(boss.frame) * 5;
+        
+        ctx.fillStyle = boss.colors[0];
+        ctx.beginPath();
+        ctx.ellipse(0, wobble, 30, 25, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#ff0';
+        ctx.beginPath();
+        ctx.arc(-12, wobble - 10, 5, 0, Math.PI * 2);
+        ctx.arc(12, wobble - 10, 5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(-12, wobble - 10, 2, 0, Math.PI * 2);
+        ctx.arc(12, wobble - 10, 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+    } else if (boss.type === "minotaur") {
+        ctx.scale(boss.size * 0.95, boss.size * 0.95);
+        
+        ctx.fillStyle = boss.colors[0];
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 22, 30, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = boss.colors[1];
+        ctx.beginPath();
+        ctx.arc(0, -40, 18, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#964';
+        ctx.beginPath();
+        ctx.moveTo(-10, -55);
+        ctx.lineTo(-18, -70);
+        ctx.lineTo(-5, -60);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.moveTo(10, -55);
+        ctx.lineTo(18, -70);
+        ctx.lineTo(5, -60);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.fillStyle = '#ff0';
+        ctx.beginPath();
+        ctx.arc(-6, -42, 3, 0, Math.PI * 2);
+        ctx.arc(6, -42, 3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(-6, -42, 1, 0, Math.PI * 2);
+        ctx.arc(6, -42, 1, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#964';
+        ctx.fillRect(25, -8, 25, 6);
+        ctx.fillRect(40, -13, 6, 16);
+    }
+    
+    if (!boss.dead && boss.state === "charge") {
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+        ctx.beginPath();
+        ctx.arc(0, 0, boss.r + 10, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (!boss.dead && boss.state === "jump") {
+        ctx.shadowColor = '#ff0';
+        ctx.shadowBlur = 20;
+    }
+    
+    ctx.restore();
+}
+
+function drawWeapon(p, weapon) {
+    if (!weapon || !weapon.type) return;
+
+    ctx.save(); 
+    
+    let angle;
+    if (Math.hypot(shootDir.x, shootDir.y) > 0.1) {
+        angle = Math.atan2(shootDir.y, shootDir.x);
+    } else {
+        angle = p.lookDir === 1 ? 0 : Math.PI;
+    }
+    
+    const isLookingLeft = angle > Math.PI/2 || angle < -Math.PI/2;
+    
+    const offsetX = 8;
+    const offsetY = -8;
+    
+    if (isLookingLeft) {
+        angle += Math.PI;
+    }
+    
+    ctx.translate(p.x, p.y);
+    ctx.rotate(angle);
+    
+    if (isLookingLeft) {
+        ctx.scale(-1, 1);
+    }
+    
+    ctx.fillStyle = weapon.color || p.wc;
+
+    if (weapon.name === "Дробовик") { 
+        ctx.fillRect(offsetX, offsetY - 3, weapon.length, 6);
+        ctx.fillStyle = "#111";
+        ctx.fillRect(offsetX - 5, offsetY - 2, 5, 4);
+        ctx.fillRect(offsetX + weapon.length - 2, offsetY - 5, 4, 10);
+    }
+    else if (weapon.name === "Автомат") { 
+        ctx.fillRect(offsetX, offsetY - 2, weapon.length, 4);
+        ctx.fillRect(offsetX - 4, offsetY - 1, 4, 2);
+        ctx.fillRect(offsetX + 8, offsetY + 2, 3, 4);
+    }
+    else if (weapon.name === "Катана") { 
+        ctx.fillStyle = "#39f";
+        ctx.beginPath();
+        ctx.moveTo(offsetX + weapon.length, offsetY);
+        ctx.lineTo(offsetX, offsetY - 2);
+        ctx.lineTo(offsetX, offsetY + 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#66f";
+        ctx.fillRect(offsetX - 3, offsetY - 1, 3, 2);
+    }
+    else if (weapon.name === "Дубина") {
+        ctx.fillStyle = "#964";
+        ctx.fillRect(offsetX, offsetY - 3, weapon.length, 6);
+        ctx.fillStyle = "#642";
+        ctx.fillRect(offsetX - 4, offsetY - 2, 4, 4);
+        ctx.fillRect(offsetX + weapon.length, offsetY - 4, 3, 8);
+    }
+    else if (weapon.name === "Жезл") {
+        ctx.fillStyle = "#a5f";
+        ctx.fillRect(offsetX, offsetY - 1, weapon.length, 2);
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.arc(offsetX + weapon.length, offsetY, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowColor = '#a5f';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(offsetX + weapon.length, offsetY, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+    else if (weapon.name === "Винтовка") {
+        ctx.fillStyle = "#333";
+        ctx.fillRect(offsetX, offsetY - 2, weapon.length, 4);
+        ctx.fillStyle = "#222";
+        ctx.fillRect(offsetX - 5, offsetY - 1, 5, 2);
+        ctx.fillStyle = "#666";
+        ctx.fillRect(offsetX + weapon.length - 3, offsetY - 3, 3, 6);
+    }
+    else if (weapon.name === "Огнемёт") {
+        ctx.fillStyle = "#f60";
+        ctx.fillRect(offsetX, offsetY - 2, weapon.length, 4);
+        ctx.fillStyle = "#f90";
+        ctx.fillRect(offsetX - 3, offsetY - 1, 3, 2);
+        ctx.fillRect(offsetX + weapon.length - 2, offsetY - 3, 2, 6);
+    }
+    else {
+        ctx.fillRect(offsetX, offsetY - 2, weapon.length || p.wl, 4);
+    }
+    
+    ctx.restore();
+}
+
+function drawChest(x, y, open, type, weaponType) {
+    ctx.save();
+    ctx.translate(x, y);
+    
+    ctx.fillStyle = '#5d4037';
+    ctx.fillRect(-20, -10, 40, 25);
+    
+    if (open) {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(-18, -8, 36, 20);
+        
+        ctx.strokeStyle = '#5d4037';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-18, -8, 36, 20);
+        
+        ctx.fillStyle = '#ffb300';
+        ctx.fillRect(-4, -10, 8, 4);
+        
+        if (type === 'heal') {
+            ctx.fillStyle = '#f00';
+            ctx.fillRect(-6, -3, 12, 3);
+            ctx.fillRect(-2, -7, 3, 12);
+        } else if (type === 'weapon') {
+            ctx.fillStyle = '#888';
+            if (weaponType === 'shotgun') {
+                ctx.fillRect(-8, -1, 16, 2);
+                ctx.fillStyle = '#111';
+                ctx.fillRect(6, -2, 3, 4);
+            } else if (weaponType === 'rifle') {
+                ctx.fillRect(-6, 0, 12, 1);
+                ctx.fillRect(-5, 1, 3, 2);
+            } else if (weaponType === 'katana') {
+                ctx.fillStyle = "#39f";
+                ctx.beginPath();
+                ctx.moveTo(-4, -0.5);
+                ctx.lineTo(4, 0);
+                ctx.lineTo(-4, 0.5);
+                ctx.fill();
+            } else if (weaponType === 'rifle_sniper') {
+                ctx.fillRect(-8, 0, 16, 2);
+                ctx.fillRect(6, -1, 2, 4);
+            } else if (weaponType === 'flamethrower') {
+                ctx.fillRect(-6, 0, 12, 1);
+                ctx.fillStyle = '#f60';
+                ctx.fillRect(4, -1, 3, 3);
+            }
+        }
+    } else {
+        ctx.fillStyle = '#8d6e63';
+        ctx.fillRect(-20, -15, 40, 10);
+        
+        ctx.fillStyle = '#ffb300';
+        ctx.fillRect(-2, -12, 4, 6);
+    }
+    
+    ctx.strokeStyle = '#3e2723';
+    ctx.lineWidth = 2;
+    if (open) {
+        ctx.strokeRect(-20, -10, 40, 25);
+    } else {
+        ctx.strokeRect(-20, -15, 40, 30);
+    }
+    
+    ctx.restore();
+}
+
+function drawWeaponOnGround(x, y, weapon, life) {
+    ctx.save();
+    ctx.translate(x, y + Math.sin(life/10)*3);
+    
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.arc(0, 4, 10, 0, Math.PI*2);
+    ctx.fill();
+    
+    ctx.fillStyle = weapon.color || '#888';
+    
+    if (weapon.name === "Дробовик") {
+        ctx.fillRect(-12, -2, 24, 4);
+        ctx.fillStyle = "#111";
+        ctx.fillRect(8, -3, 4, 6);
+    }
+    else if (weapon.name === "Автомат") {
+        ctx.fillRect(-10, -1, 20, 2);
+        ctx.fillRect(-8, 1, 4, 3);
+    }
+    else if (weapon.name === "Катана") {
+        ctx.fillStyle = "#39f";
+        ctx.beginPath();
+        ctx.moveTo(-8, -1);
+        ctx.lineTo(8, 0);
+        ctx.lineTo(-8, 1);
+        ctx.fill();
+        ctx.fillStyle = "#66f";
+        ctx.fillRect(-10, -0.5, 2, 1);
+    }
+    else if (weapon.name === "Дубина") {
+        ctx.fillStyle = "#964";
+        ctx.fillRect(-12, -2, 24, 4);
+        ctx.fillStyle = "#642";
+        ctx.fillRect(-8, -3, 4, 6);
+        ctx.fillRect(8, -4, 3, 8);
+    }
+    else if (weapon.name === "Жезл") {
+        ctx.fillStyle = "#a5f";
+        ctx.fillRect(-9, -1, 18, 2);
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.arc(9, 0, 4, 0, Math.PI*2);
+        ctx.fill();
+    }
+    else if (weapon.name === "Винтовка") {
+        ctx.fillStyle = "#333";
+        ctx.fillRect(-12, -1, 24, 2);
+        ctx.fillStyle = "#222";
+        ctx.fillRect(8, -2, 3, 4);
+    }
+    else if (weapon.name === "Огнемёт") {
+        ctx.fillStyle = "#f60";
+        ctx.fillRect(-10, -1, 20, 2);
+        ctx.fillStyle = "#f90";
+        ctx.fillRect(8, -2, 2, 4);
+    }
+    
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.beginPath();
+    ctx.arc(-5, -3, 2, 0, Math.PI*2);
+    ctx.fill();
+    
+    ctx.restore();
+}
+
+function drawTrap(x, y, used) {
+    ctx.save();
+    ctx.translate(x, y);
+    
+    ctx.fillStyle = used ? '#666' : '#382';
+    ctx.beginPath();
+    ctx.arc(0, 0, 25, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.strokeStyle = used ? '#444' : '#6a4';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    if (!used) {
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(0, 0, 5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.strokeStyle = '#f00';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-15, -15);
+        ctx.lineTo(15, 15);
+        ctx.moveTo(15, -15);
+        ctx.lineTo(-15, 15);
+        ctx.stroke();
+    }
+    
+    ctx.restore();
+}
+
+function drawEntity(x, y, colors, lookDir, frame, pObj = null, enObj = null) {
+    ctx.save(); 
+    ctx.translate(x, y); 
+    const p = 5;
+    
+    if ((pObj && pObj.n === "Огр") || (enObj && enObj.type === "громила")) ctx.scale(1.2, 1.2);
+    
+    if(enObj) { 
+        ctx.fillStyle = "#300"; 
+        ctx.fillRect(-20, -35, 40, 4); 
+        ctx.fillStyle = "#f00"; 
+        ctx.fillRect(-20, -35, (Math.max(0, enObj.hp)/enObj.maxHp)*40, 4); 
+    }
+    
+    if(enObj && enObj.type === 'kamikaze' && enObj.state === 'explode') { 
+        let s = 1 + (42 - enObj.et) * 0.02; 
+        ctx.scale(s, s);
+        ctx.fillStyle = `rgba(255,${Math.sin(Date.now()/50)*100+155},0,0.4)`; 
+        ctx.beginPath(); 
+        ctx.arc(0,0,40,0,Math.PI*2); 
+        ctx.fill(); 
+    }
+    
+    if(enObj && enObj.type === 'sniper' && enObj.aiming > 30) {
+        ctx.strokeStyle = `rgba(255,0,0,${enObj.aiming/130})`; 
+        if(enObj.aiming < 100) ctx.setLineDash([5, 5]); 
+        ctx.beginPath(); 
+        ctx.moveTo(0,0);
+        let a = enObj.aimLock !== null ? enObj.aimLock : Math.atan2(player.y-y, player.x-x); 
+        ctx.lineTo(Math.cos(a)*1000, Math.sin(a)*1000); 
+        ctx.stroke(); 
+        ctx.setLineDash([]);
+    }
+    
+    ctx.fillStyle = colors[3]; 
+    const walk = Math.sin(frame) * 6;
+    ctx.fillRect(-p*1.5, p*2+walk, p*1.2, p*2); 
+    ctx.fillRect(p*0.5, p*2-walk, p*1.2, p*2);
+    
+    ctx.fillStyle = colors[0]; 
+    
+    if (pObj && pObj.n === "Танк") { 
+        ctx.fillRect(-p*3, -p*2, p*6, p*4.5); 
+        ctx.fillStyle = "#777"; 
+        ctx.fillRect(-p*3.5, -p*2, p*1.5, p*2); 
+        ctx.fillRect(p*2, -p*2, p*1.5, p*2); 
+    }
+    else if (pObj && pObj.n === "Маг") { 
+        ctx.fillStyle = colors[0];
+        ctx.fillRect(-p*2.5, -p*2, p*5, p*4.5);
+        ctx.fillStyle = '#55a';
+        ctx.beginPath();
+        ctx.moveTo(-p*3, -p*2);
+        ctx.lineTo(p*3, -p*2);
+        ctx.lineTo(p*2, p*3);
+        ctx.lineTo(-p*2, p*3);
+        ctx.closePath();
+        ctx.fill();
+    }
+    else if (pObj && pObj.n === "Охотник") {
+        ctx.fillStyle = colors[0];
+        ctx.fillRect(-p*2.5, -p*2, p*5, p*4.5);
+        ctx.fillStyle = '#c18c5d';
+        ctx.fillRect(-p*2, -p*5, p*4, p*3.5);
+        ctx.fillStyle = '#6a4';
+        ctx.beginPath();
+        ctx.moveTo(-p*1, -p*6);
+        ctx.lineTo(p*0, -p*8);
+        ctx.lineTo(p*1, -p*6);
+        ctx.closePath();
+        ctx.fill();
+    }
+    else { 
+        ctx.fillRect(-p*2.5, -p*2, p*5, p*4.5); 
+    }
+    
+    ctx.save(); 
+    ctx.scale(lookDir, 1); 
+    ctx.fillStyle = colors[1]; 
+    ctx.fillRect(-p*2, -p*5, p*4, p*3.5); 
+    
+    if (pObj && pObj.n === "Боец") {
+        ctx.fillStyle = '#555';
+        ctx.fillRect(-p*2.5, -p*5.5, p*5, p*3);
+    }
+    
+    ctx.fillStyle = colors[2]; 
+    if (enObj && enObj.type === "sniper") { 
+        ctx.fillStyle = "#0ff"; 
+        ctx.fillRect(0, -p*4.5, p*2, p*1.5); 
+    } else { 
+        ctx.fillRect(p*0.5, -p*4.2, p, p); 
+    }
+    
+    if(pObj && pObj.n === "Маг") { 
+        ctx.fillStyle = '#226';
+        ctx.beginPath();
+        ctx.moveTo(-p*3.5, -p*5);
+        ctx.lineTo(0, -p*10);
+        ctx.lineTo(p*3.5, -p*5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#ff0';
+        ctx.beginPath();
+        ctx.arc(0, -p*8, 2, 0, Math.PI*2);
+        ctx.fill();
+    }
+    
+    if(pObj && pObj.n === "Ниндзя") { 
+        ctx.fillStyle = "#f00"; 
+        ctx.fillRect(-p*2, -p*5.2, p*4, p*0.6); 
+    }
+    
+    if(pObj && pObj.n === "Охотник") {
+        ctx.fillStyle = '#261';
+        ctx.fillRect(-p*1.5, -p*6, p*3, p*2);
+    }
+    
+    if(enObj && enObj.type === 'healer') { 
+        ctx.strokeStyle = "#ff0"; 
+        ctx.lineWidth = 2; 
+        ctx.beginPath(); 
+        ctx.arc(0, -p*7.5, p*2, 0, Math.PI*2); 
+        ctx.stroke(); 
+    }
+    
+    if(enObj && enObj.type === 'pyro' && Math.random() > 0.8) { 
+        ctx.fillStyle = "#f60"; 
+        ctx.fillRect(Math.random()*10-5, -p*6, 2, 2); 
+    }
+    
+    if(enObj && enObj.buffed) {
+        ctx.shadowColor = '#ff00ff';
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(0, 0, enObj.r + 5, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 0, 255, 0.7)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    }
+    
+    ctx.restore();
+    
+    if(pObj) {
+        const activeWeapon = getActiveWeapon();
+        drawWeapon(pObj, activeWeapon);
+    }
+    
+    ctx.restore();
+}
+
+function render() {
+    ctx.save();
+    
+    if (shake > 0) ctx.translate(Math.random()*shake-shake/2, Math.random()*shake-shake/2);
+    
+    if (isBossRoom && boss) {
+        ctx.shadowColor = '#f0f';
+        ctx.shadowBlur = 20;
+    }
+    
+    ctx.fillStyle = '#1a1a1a'; 
+    ctx.fillRect(0, 0, width, height);
+    
+    ctx.strokeStyle = '#222'; 
+    ctx.lineWidth = 1;
+    for(let i=0; i<width; i+=40) { 
+        ctx.beginPath(); 
+        ctx.moveTo(i, 0); 
+        ctx.lineTo(i, height); 
+        ctx.stroke(); 
+    }
+    for(let i=0; i<height; i+=40) { 
+        ctx.beginPath(); 
+        ctx.moveTo(0, i); 
+        ctx.lineTo(width, i); 
+        ctx.stroke(); 
+    }
+    
+    if (gameState === 'play' || gameState === 'paused') {
+        currentTraps.forEach(trap => {
+            drawTrap(trap.x, trap.y, trap.used);
+        });
+        
+        ctx.fillStyle = '#333'; 
+        ctx.fillRect(0, 0, width, 45); 
+        ctx.fillRect(0, height-45, width, 45); 
+        ctx.fillRect(0, 0, 45, height); 
+        ctx.fillRect(width-45, 0, 45, height);
+        
+        ctx.fillStyle = '#222'; 
+        for(let i=0; i<width; i+=30) { 
+            ctx.fillRect(i, 35, 15, 10); 
+            ctx.fillRect(i, height-45, 15, 10); 
+        } 
+        for(let i=0; i<height; i+=30) { 
+            ctx.fillRect(35, i, 10, 15); 
+            ctx.fillRect(width-45, i, 10, 15); 
+        }
+        
+        obstacles.forEach(o => { 
+            if (o.destructible) { 
+                ctx.fillStyle = '#5d4037'; 
+                ctx.fillRect(o.x, o.y, o.w, o.h); 
+                ctx.strokeStyle = '#3e2723'; 
+                ctx.lineWidth = 2; 
+                ctx.strokeRect(o.x+4, o.y+4, o.w-8, o.h-8); 
+                ctx.beginPath(); 
+                ctx.moveTo(o.x, o.y); 
+                ctx.lineTo(o.x+o.w, o.y+o.h); 
+                ctx.stroke(); 
+            } else { 
+                ctx.fillStyle = '#424242'; 
+                ctx.fillRect(o.x, o.y, o.w, o.h); 
+                ctx.fillStyle = '#616161'; 
+                ctx.fillRect(o.x+5, o.y+5, o.w-10, 5); 
+            } 
+        });
+        
+        const canExit = (enemies.length === 0 || (godMode && anyRoomCleared)), dz = 80, wp = 45;
+        const drD = (x, y, w, h, op) => { 
+            if(op) { 
+                ctx.fillStyle = '#1a1a1a'; 
+                ctx.fillRect(x,y,w,h); 
+            } else { 
+                ctx.fillStyle = '#4e342e'; 
+                ctx.fillRect(x,y,w,h); 
+                ctx.strokeStyle = '#2e1d1a'; 
+                ctx.lineWidth = 3; 
+                if(w>h) { 
+                    for(let i=10; i<w; i+=20) { 
+                        ctx.beginPath(); 
+                        ctx.moveTo(x+i, y); 
+                        ctx.lineTo(x+i, y+h); 
+                        ctx.stroke(); 
+                    } 
+                } else { 
+                    for(let i=10; i<h; i+=20) { 
+                        ctx.beginPath(); 
+                        ctx.moveTo(x, y+i); 
+                        ctx.lineTo(x+w, y+i); 
+                        ctx.stroke(); 
+                    } 
+                } 
+                ctx.strokeRect(x, y, w, h); 
+            } 
+        };
+        
+        if (isBossRoom) {
+            const bossDead = (boss && boss.dead) || dungeon[`${curX},${curY}`].cleared;
+            if (bossDead) {
+                if (cameFromDir === 'top') drD(width/2-50, 0, 100, 46, true);
+                if (cameFromDir === 'bottom') drD(width/2-50, height-46, 100, 46, true);
+                if (cameFromDir === 'left') drD(0, height/2-50, 46, 100, true);
+                if (cameFromDir === 'right') drD(width-46, height/2-50, 46, 100, true);
+            } else {
+                if (cameFromDir === 'top') drD(width/2-50, 0, 100, 46, false);
+                if (cameFromDir === 'bottom') drD(width/2-50, height-46, 100, 46, false);
+                if (cameFromDir === 'left') drD(0, height/2-50, 46, 100, false);
+                if (cameFromDir === 'right') drD(width-46, height/2-50, 46, 100, false);
+            }
+        } else {
+            roomDoors.forEach(dir => {
+                if(dir === 'top') drD(width/2-50, 0, 100, 46, canExit);
+                if(dir === 'bottom') drD(width/2-50, height-46, 100, 46, canExit);
+                if(dir === 'left') drD(0, height/2-50, 46, 100, canExit);
+                if(dir === 'right') drD(width-46, height/2-50, 46, 100, canExit);
+            });
+        }
+        
+        if(curX === 0 && curY === 0 && isDungeonClear()) { 
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.2)'; 
+            ctx.beginPath(); 
+            ctx.arc(width/2, height/2, 50, 0, Math.PI*2); 
+            ctx.fill(); 
+            ctx.strokeStyle = '#0ff'; 
+            ctx.lineWidth = 2; 
+            ctx.setLineDash([5, 5]); 
+            ctx.beginPath(); 
+            ctx.arc(width/2, height/2, 40+Math.sin(Date.now()/200)*5, 0, Math.PI*2); 
+            ctx.stroke(); 
+            ctx.setLineDash([]); 
+        }
+        
+        items.forEach(it => { 
+            drawChest(it.x, it.y, it.open, it.type, it.weapon);
+        });
+        
+        droppedCoins.forEach(c => { 
+            if (c.isWeapon) {
+                drawWeaponOnGround(c.x, c.y, c.weapon, c.life);
+            } else {
+                ctx.fillStyle = '#fe0'; 
+                ctx.strokeStyle = '#d40'; 
+                ctx.lineWidth = 2; 
+                ctx.beginPath(); 
+                ctx.arc(c.x, c.y+Math.sin(c.life/10)*3, 8, 0, Math.PI*2); 
+                ctx.fill(); 
+                ctx.stroke(); 
+            }
+        });
+        
+        enemies.forEach(en => { 
+            drawEntity(en.x, en.y, en.c, player.x > en.x ? 1 : -1, 0, null, en); 
+        });
+        
+        if (boss && boss.x > -100 && boss.x < width + 100 && boss.y > -100 && boss.y < height + 100) {
+            drawBoss();
+        }
+        
+        if (abActiveTimer > 0) { 
+            ctx.save();
+            if (player.n === "Танк") {
+                let pS = Math.sin(Date.now()/100) * 5; 
+                ctx.strokeStyle = '#0af'; 
+                ctx.lineWidth = 4; 
+                ctx.beginPath(); 
+                ctx.arc(player.x, player.y, 45 + pS, 0, Math.PI*2); 
+                ctx.stroke();
+                ctx.strokeStyle = 'rgba(0, 170, 255, 0.3)'; 
+                ctx.lineWidth = 10; 
+                ctx.beginPath(); 
+                ctx.arc(player.x, player.y, 45 + pS, 0, Math.PI*2); 
+                ctx.stroke();
+            } else if (player.n === "Боец") { 
+                ctx.strokeStyle = `rgba(255, 0, 0, ${0.3 + Math.sin(Date.now()/100)*0.2})`; 
+                ctx.lineWidth = 3; 
+                ctx.beginPath(); 
+                ctx.arc(player.x, player.y, 45, 0, Math.PI*2); 
+                ctx.stroke();
+            } else if (player.n === "Огр") { 
+                let wR = (40 - abActiveTimer) * 7.5; 
+                ctx.strokeStyle = `rgba(210, 180, 140, ${abActiveTimer/40})`; 
+                ctx.lineWidth = 6; 
+                ctx.beginPath(); 
+                ctx.arc(player.x, player.y, wR, 0, Math.PI*2); 
+                ctx.stroke();
+            } 
+            ctx.restore(); 
+        }
+        
+        drawEntity(player.x, player.y, player.c, player.lookDir, player.frame, player);
+        
+        bullets.forEach(b => { 
+            if (b.type === "axe") {
+                ctx.fillStyle = '#964';
+                ctx.save();
+                ctx.translate(b.x, b.y);
+                ctx.rotate(Math.atan2(b.vy, b.vx));
+                ctx.fillRect(-15, -3, 30, 6);
+                ctx.fillRect(10, -8, 5, 16);
+                ctx.restore();
+            } else if (b.type === "slime") {
+                ctx.fillStyle = '#0f0';
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#0a5';
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.fillStyle = b.side === 'p' ? '#0f0' : (b.isFire ? '#f90' : '#f00'); 
+                ctx.beginPath(); 
+                ctx.arc(b.x, b.y, b.isFire?5:3, 0, Math.PI*2); 
+                ctx.fill(); 
+            }
+        });
+        
+        attacks.forEach(a => { 
+            ctx.strokeStyle = a.side === 'p' ? 
+                `rgba(255,255,255,${a.life/10})` : 
+                `rgba(255,0,0,${a.life/10})`; 
+            ctx.lineWidth = 6; 
+            ctx.beginPath(); 
+            ctx.arc(a.x, a.y, a.radius, a.angle-1.2, a.angle+1.2); 
+            ctx.stroke(); 
+        });
+    }
+    
+    ctx.restore(); 
+    requestAnimationFrame(render);
+}
+
+window.onresize = () => { 
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+};
+
+window.onresize(); 
+setupControls();
+loadGame();
+initCharList(); 
+render(); 
+setInterval(update, 1000/60);
+</script>
+</body>
+</html>
